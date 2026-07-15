@@ -37,7 +37,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 pnpm install
 pnpm tauri dev          # run the app (dev)
-pnpm tauri build        # production bundle
+pnpm tauri build        # production bundle → src-tauri/target/release/bundle/macos/Terax.app (drop-in replace for /Applications/Terax.app)
 
 pnpm lint               # biome lint ./src
 pnpm check-types        # tsc --noEmit
