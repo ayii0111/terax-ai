@@ -48,7 +48,8 @@ this._keyDownSeen=!(e.key==="Shift"||e.key==="Control"||e.key==="Alt"||e.key==="
 ## 驗證狀態
 
 - `pnpm check-types`、`pnpm test`（363 tests）全過。
-- 實機驗證：`pnpm tauri dev` 開終端，切中文輸入法，Shift 按住連按 `[` 兩次，應出現「「（第一下不再被吞）。
+- 實機驗證：使用者已在 `pnpm tauri dev` 確認修好（2026-07-16）。
+- `/Applications/Terax.app`：已於 2026-07-16 換成含此修法＋Option 修法的自編 0.8.5（`pnpm tauri build` 最後的 updater 簽章步驟會因沒有 `TAURI_SIGNING_PRIVATE_KEY` 報錯，屬正常，.app 本體已建好；build 時跳出的 DMG 拖曳視窗可直接關掉）。
 
 ---
 
