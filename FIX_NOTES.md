@@ -1,4 +1,58 @@
-# Terax Option+方向鍵跳字失效 — 修復筆記（給下次接手的 agent 看）
+# Terax 客製化修復筆記（給下次接手的 agent 看）
+
+---
+
+# 修復 2：IME 全形符號第一個字被吃掉（分支 `fix/ime-fullwidth-first-char-keydownseen`）
+
+## 一句話結論
+
+中文輸入法下按住 Shift 連打全形符號（如 Shift+[ → 「），**第一個字會被吞掉**，根因是 xterm.js 的 `_keyDownSeen` 旗標被「按住的 Shift 的 keydown」毒化，擋掉了 WKWebView 上唯一能接住這種字的 `input` 事件 fallback。修法是用 `pnpm patch` 對 `@xterm/xterm@6.0.0` 打補丁：純修飾鍵的 keydown 不設 `_keyDownSeen`。
+
+## 根因（別再重新排查）
+
+- WKWebView 上，IME 直接送出（direct-commit）全形符號的事件順序是 **`input` 先、`keydown(keyCode 229)` 後**，且全程沒有 composition 事件。xterm 假設 keydown 先來。
+- xterm 兩條接收路徑因此都失效：
+  1. keydown 229 → `CompositionHelper._handleAnyTextareaChanges()`：diff textarea 舊值 vs 新值，但 `input` 已先寫入，keydown 當下的「舊值」已含新字 → diff 為空 → 不送。**每一下都如此。**
+  2. `input` 事件 fallback（`CoreBrowserTerminal.ts` `_inputEvent`）：條件 `!ev.composed || !this._keyDownSeen`。`_keyDownSeen` 在任何 keydown 設 true、keyup 才重設。
+- 實際送字的一直是路徑 2。按住 Shift 時，Shift 的 keydown 把 `_keyDownSeen` 設成 true，第一個字的 `input` 被擋 → 吞掉；第一下 `[` 的 keyup 重設旗標後，後續每下都正常。
+
+## 怎麼證實的
+
+Release 版沒開 devtools，用 `pnpm tauri dev` + Cmd+Option+I，在 Console 監聽 `.xterm-helper-textarea` 的 keydown/input/composition 事件。實測 log（Shift 按住連按兩次 `[`）：
+
+```
+keydown key=Shift keyCode=16
+input  data="「"  taValue="「"      ← input 先到，被 _keyDownSeen 擋掉（吞）
+keydown key={ keyCode=229 taValue="「"  ← diff 為空，不送
+keyup  key={ keyCode=219            ← 重設 _keyDownSeen
+input  data="「"  taValue="「「"     ← 第二下走 fallback，正常送出
+keydown key={ keyCode=229
+```
+
+## 修法
+
+`patches/@xterm__xterm.patch`（`pnpm patch @xterm/xterm` 產生，`pnpm-workspace.yaml` 的 `patchedDependencies` 引用）。對 `lib/xterm.js` 和 `lib/xterm.mjs` 各一處，把 `_keyDown(e)` 開頭的：
+
+```js
+this._keyDownSeen=!0
+```
+
+改成：
+
+```js
+this._keyDownSeen=!(e.key==="Shift"||e.key==="Control"||e.key==="Alt"||e.key==="Meta"||e.key==="CapsLock")
+```
+
+修飾鍵本來就不會產生文字，不設旗標不影響原本行為；xterm 升版時 patch 若對不上，重跑 `pnpm patch` 流程照上面改即可。這是 xterm.js 上游 bug，可考慮回報 https://github.com/xtermjs/xterm.js 。
+
+## 驗證狀態
+
+- `pnpm check-types`、`pnpm test`（363 tests）全過。
+- 實機驗證：`pnpm tauri dev` 開終端，切中文輸入法，Shift 按住連按 `[` 兩次，應出現「「（第一下不再被吞）。
+
+---
+
+# 修復 1：Option+方向鍵跳字失效（分支 `fix/option-arrow-keycode-229`）
 
 ## 一句話結論
 

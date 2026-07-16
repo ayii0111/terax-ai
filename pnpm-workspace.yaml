@@ -4,3 +4,5 @@ allowBuilds:
   esbuild: true
   msgpackr-extract: false
   msw: true
+patchedDependencies:
+  '@xterm/xterm': patches/@xterm__xterm.patch
