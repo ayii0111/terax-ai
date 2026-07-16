@@ -43,7 +43,13 @@ this._keyDownSeen=!0
 this._keyDownSeen=!(e.key==="Shift"||e.key==="Control"||e.key==="Alt"||e.key==="Meta"||e.key==="CapsLock")
 ```
 
-修飾鍵本來就不會產生文字，不設旗標不影響原本行為；xterm 升版時 patch 若對不上，重跑 `pnpm patch` 流程照上面改即可。這是 xterm.js 上游 bug，可考慮回報 https://github.com/xtermjs/xterm.js 。
+修飾鍵本來就不會產生文字，不設旗標不影響原本行為；xterm 升版時 patch 若對不上，重跑 `pnpm patch` 流程照上面改即可。
+
+## 上游回報狀態
+
+- 這是 xterm.js 上游 bug，同機制的既有 issue：https://github.com/xtermjs/xterm.js/issues/5887 （豆包輸入法快打掉第二個字，壞的是同一行 `_keyDownSeen` 判斷）。
+- 已於 2026-07-16 以 ayii0111 帳號在該 issue 補上我們的 WKWebView＋按住 Shift 變體（事件 log、根因分析、修法）：https://github.com/xtermjs/xterm.js/issues/5887#issuecomment-4990106343
+- **上游若修好並發版**：升級 `@xterm/xterm` 後可移除 `patches/@xterm__xterm.patch`（連同 `pnpm-workspace.yaml` 的 `patchedDependencies`），實測 Shift+全形符號確認後再收掉。
 
 ## 驗證狀態
 
