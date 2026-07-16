@@ -49,7 +49,8 @@ this._keyDownSeen=!(e.key==="Shift"||e.key==="Control"||e.key==="Alt"||e.key==="
 
 - 這是 xterm.js 上游 bug，同機制的既有 issue：https://github.com/xtermjs/xterm.js/issues/5887 （豆包輸入法快打掉第二個字，壞的是同一行 `_keyDownSeen` 判斷）。
 - 已於 2026-07-16 以 ayii0111 帳號在該 issue 補上我們的 WKWebView＋按住 Shift 變體（事件 log、根因分析、修法）：https://github.com/xtermjs/xterm.js/issues/5887#issuecomment-4990106343
-- **上游若修好並發版**：升級 `@xterm/xterm` 後可移除 `patches/@xterm__xterm.patch`（連同 `pnpm-workspace.yaml` 的 `patchedDependencies`），實測 Shift+全形符號確認後再收掉。
+- 已於 2026-07-16 對 xterm.js 原始碼（`src/browser/CoreBrowserTerminal.ts` 的 `_keyDown`，複用既有的 `wasModifierKeyOnlyEvent()` helper）送出正式 PR：**https://github.com/xtermjs/xterm.js/pull/6054**（分支 `fix/ime-keydownseen-modifier`，在 fork `ayii0111/xterm.js` 上）。PR 本體未在本機跑過 xterm.js 自己的 lint/unit/integration test（沙箱無法對外部 repo 跑 `npm ci` 的 postinstall），依賴其 CI 把關；功能面已用 `pnpm patch` 版本在真實 WKWebView app 驗證過。
+- **上游若合併並發版**：升級 `@xterm/xterm` 後可移除 `patches/@xterm__xterm.patch`（連同 `pnpm-workspace.yaml` 的 `patchedDependencies`），實測 Shift+全形符號確認後再收掉。
 
 ## 驗證狀態
 
@@ -107,6 +108,12 @@ if (event.isComposing || (event.keyCode === 229 && !isNavigationKey)) {
   return false;
 }
 ```
+
+## 上游狀態
+
+- 官方 PR：https://github.com/crynta/terax-ai/pull/956 （OPEN、mergeable，但至 2026-07-16 只有 coderabbitai 機器人 review，無真人維護者處理）。
+- 官方 issue（2026-07-16 新開，作為問題本體的 source of truth）：https://github.com/crynta/terax-ai/issues/1009 。切入點是「#258 特意加的 ⌥+方向鍵功能在 macOS 上其實 100% 失效」，並在 PR #956 留言互相連結。
+- 這是 **Terax 自己的 bug**（官方原始碼的守衛造成），跟修復 2 的 xterm.js bug 不同層。
 
 ## 這個資料夾裡有什麼
 
