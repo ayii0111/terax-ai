@@ -14,6 +14,11 @@ import {
   type SttProvider,
   WHISPERCPP_DEFAULT_BASE_URL,
 } from "@/modules/ai/config";
+import {
+  type AgentLaunchCommands,
+  DEFAULT_AGENT_LAUNCH_COMMANDS,
+  normalizeAgentLaunchCommands,
+} from "@/modules/agents/lib/launcher";
 import type { KeyBinding, ShortcutId } from "@/modules/shortcuts/shortcuts";
 import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { LazyStore } from "@tauri-apps/plugin-store";
@@ -23,6 +28,8 @@ export type ThemePref = "system" | "light" | "dark";
 export const DEFAULT_THEME_ID = "terax-default";
 
 export type BackgroundKind = "none" | "image";
+
+export type TerminalCursorStyle = "bar" | "block" | "underline";
 
 export const EDITOR_THEMES = [
   "kanagawa",
@@ -150,6 +157,7 @@ export type Preferences = {
   explorerGitDecorations: boolean;
   terminalWebglEnabled: boolean;
   terminalCursorBlink: boolean;
+  terminalCursorStyle: TerminalCursorStyle;
   terminalFontFamily: string;
   terminalFontWeight: string;
   terminalShell: string;
@@ -159,6 +167,7 @@ export type Preferences = {
   lastWslDistro: string | null;
   zoomLevel: number;
   agentNotifications: boolean;
+  agentLaunchCommands: AgentLaunchCommands;
   defaultWorkspaceEnv: string;
   shortcuts: Record<ShortcutId, KeyBinding[]>;
   editorAutoSave: boolean;
@@ -239,6 +248,7 @@ const LEGACY_KEY_SHOW_HIDDEN_DIRS = "showHiddenDirectories";
 const KEY_EXPLORER_GIT_DECORATIONS = "explorerGitDecorations";
 const KEY_TERMINAL_WEBGL_ENABLED = "terminalWebglEnabled";
 const KEY_TERMINAL_CURSOR_BLINK = "terminalCursorBlink";
+const KEY_TERMINAL_CURSOR_STYLE = "terminalCursorStyle";
 const KEY_TERMINAL_FONT_FAMILY = "terminalFontFamily";
 const KEY_TERMINAL_FONT_WEIGHT = "terminalFontWeight";
 const KEY_TERMINAL_SHELL = "terminalShell";
@@ -248,6 +258,7 @@ const KEY_TERMINAL_SCROLLBACK = "terminalScrollback";
 const KEY_LAST_WSL_DISTRO = "lastWslDistro";
 const KEY_ZOOM_LEVEL = "zoomLevel";
 const KEY_AGENT_NOTIFICATIONS = "agentNotifications";
+const KEY_AGENT_LAUNCH_COMMANDS = "agentLaunchCommands";
 const KEY_DEFAULT_WORKSPACE_ENV = "defaultWorkspaceEnv";
 const KEY_SHORTCUTS = "shortcuts";
 const KEY_EDITOR_AUTO_SAVE = "editorAutoSave";
@@ -320,6 +331,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   explorerGitDecorations: true,
   terminalWebglEnabled: true,
   terminalCursorBlink: false,
+  terminalCursorStyle: "bar",
   terminalFontFamily: "",
   terminalFontWeight: "normal",
   terminalShell: "",
@@ -329,6 +341,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   lastWslDistro: null,
   zoomLevel: 1.0,
   agentNotifications: true,
+  agentLaunchCommands: DEFAULT_AGENT_LAUNCH_COMMANDS,
   defaultWorkspaceEnv: "local",
   shortcuts: {} as Record<ShortcutId, KeyBinding[]>,
   editorAutoSave: false,
@@ -470,6 +483,9 @@ export async function loadPreferences(): Promise<Preferences> {
     terminalCursorBlink:
       get<boolean>(KEY_TERMINAL_CURSOR_BLINK) ??
       DEFAULT_PREFERENCES.terminalCursorBlink,
+    terminalCursorStyle: coerceTerminalCursorStyle(
+      get<unknown>(KEY_TERMINAL_CURSOR_STYLE),
+    ),
     terminalFontFamily:
       get<string>(KEY_TERMINAL_FONT_FAMILY) ??
       DEFAULT_PREFERENCES.terminalFontFamily,
@@ -496,6 +512,9 @@ export async function loadPreferences(): Promise<Preferences> {
     agentNotifications:
       get<boolean>(KEY_AGENT_NOTIFICATIONS) ??
       DEFAULT_PREFERENCES.agentNotifications,
+    agentLaunchCommands: normalizeAgentLaunchCommands(
+      get<unknown>(KEY_AGENT_LAUNCH_COMMANDS),
+    ),
     defaultWorkspaceEnv:
       get<string>(KEY_DEFAULT_WORKSPACE_ENV) ??
       DEFAULT_PREFERENCES.defaultWorkspaceEnv,
@@ -735,6 +754,16 @@ export async function setTerminalCursorBlink(value: boolean): Promise<void> {
   await writePref(KEY_TERMINAL_CURSOR_BLINK, value);
 }
 
+export function coerceTerminalCursorStyle(value: unknown): TerminalCursorStyle {
+  return value === "bar" || value === "block" || value === "underline"
+    ? value
+    : DEFAULT_PREFERENCES.terminalCursorStyle;
+}
+
+export async function setTerminalCursorStyle(value: unknown): Promise<void> {
+  await writePref(KEY_TERMINAL_CURSOR_STYLE, coerceTerminalCursorStyle(value));
+}
+
 export async function setTerminalFontFamily(value: string): Promise<void> {
   await writePref(KEY_TERMINAL_FONT_FAMILY, value.trim());
 }
@@ -836,6 +865,15 @@ export async function setAgentNotifications(value: boolean): Promise<void> {
   await writePref(KEY_AGENT_NOTIFICATIONS, value);
 }
 
+export async function setAgentLaunchCommands(
+  value: AgentLaunchCommands,
+): Promise<void> {
+  await writePref(
+    KEY_AGENT_LAUNCH_COMMANDS,
+    normalizeAgentLaunchCommands(value),
+  );
+}
+
 export async function setDefaultWorkspaceEnv(value: string): Promise<void> {
   await writePref(KEY_DEFAULT_WORKSPACE_ENV, value);
 }
@@ -895,6 +933,7 @@ export async function onPreferencesChange(
     [KEY_EXPLORER_GIT_DECORATIONS]: "explorerGitDecorations",
     [KEY_TERMINAL_WEBGL_ENABLED]: "terminalWebglEnabled",
     [KEY_TERMINAL_CURSOR_BLINK]: "terminalCursorBlink",
+    [KEY_TERMINAL_CURSOR_STYLE]: "terminalCursorStyle",
     [KEY_TERMINAL_FONT_FAMILY]: "terminalFontFamily",
     [KEY_TERMINAL_FONT_WEIGHT]: "terminalFontWeight",
     [KEY_TERMINAL_SHELL]: "terminalShell",
@@ -904,6 +943,7 @@ export async function onPreferencesChange(
     [KEY_LAST_WSL_DISTRO]: "lastWslDistro",
     [KEY_ZOOM_LEVEL]: "zoomLevel",
     [KEY_AGENT_NOTIFICATIONS]: "agentNotifications",
+    [KEY_AGENT_LAUNCH_COMMANDS]: "agentLaunchCommands",
     [KEY_DEFAULT_WORKSPACE_ENV]: "defaultWorkspaceEnv",
     [KEY_SHORTCUTS]: "shortcuts",
     [KEY_EDITOR_AUTO_SAVE]: "editorAutoSave",
