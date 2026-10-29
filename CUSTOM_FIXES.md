@@ -69,6 +69,19 @@ IME 組字中（`isComposing` / `compositionstart`～`compositionend`）**不可
 - **定位關鍵字**：`command rg -n "deltaY < 0 \? 64 : 65|handleWheel|wheelRemainder" src`
 - **驗收**：在 `claude` 裡輸出夠長的內容後，雙指慢慢往上滑，畫面應該一步一步捲，不會一下跳好幾格。外接滑鼠滾一格也要確認仍會捲動。
 
+## 3.2 客製化 #3：Nerd Font 圖示變成方框 □（commit `fix(terminal): register installed Nerd Fonts hidden from WKWebView`）
+
+- **行為**：終端機字型留空（自動偵測）時，prompt、`eza --icons` 等 Nerd Font 私用區（PUA）圖示要正常顯示。
+- **原因**：macOS WKWebView **不讓網頁內容看到使用者自行安裝的字型**（`~/Library/Fonts`、`/Library/Fonts`），CoreText 看得到也沒用，打開 WebKit 的 `shouldAllowUserInstalledFonts` 也一樣。`src/lib/fonts.ts` 的 `detectMonoFontFamily` 因此偵測不到 Nerd Font，退回 JetBrains Mono / Menlo，而這兩個都沒有 PUA 字形。官方在 `8ba1a0a` 拿掉了內建 symbol 字型，改成依賴已安裝的 Nerd Font，正好踩到這個限制。已用獨立的 WKWebView 探測程式驗證過。
+- **修法**：
+  - Rust `src-tauri/src/modules/fonts.rs`：`terminal_nerd_font(families)` 只在 macOS 上，到上述兩個目錄找 `{族名去空白}-Regular.{ttf,otf}`，回傳原始 bytes（找不到就回空 body）。族名必須含 `Nerd Font` 且只能是英數字和空白（防路徑穿越），另外有大小上限與字型 magic 檢查。指令註冊在 `lib.rs` 的 `generate_handler!`。
+  - `fonts.ts`：`FALLBACK_CHAIN` 在 JetBrains Mono 後面插入 `"Terax Nerd Symbols"`；`ensureMonoFontsLoaded` 在偵測不到 Nerd Font 時呼叫上述指令，用 `FontFace` 以這個名字註冊。只有 JetBrains Mono 缺的字形會 fallback 過去，一般文字外觀不變。
+  - 注意：canvas context 若在字型註冊**前**就設過同一個 `font` 字串，WebKit 會沿用舊的解析結果；目前 glyph rasterizer 是在 `ensureMonoFontsLoaded` 之後才建立 canvas，所以沒問題，重構時要保持這個順序。
+- **測試**：`fonts.rs` 的 4 個單元測試；`fonts.test.ts` 的 "registers an installed Nerd Font only when …"。
+- **定位關鍵字**：`command rg -n "NERD_FONT_CANDIDATES|FALLBACK_CHAIN|ensureMonoFontsLoaded" src/lib`
+- **先看官方是否已修**：如果官方把 symbol 字型加回來，或已改用其他方式載入已安裝字型，這個 commit 就拿掉。
+- **驗收**：字型設定留空，在 `zsh` 裡看 prompt 圖示，並執行 `eza --icons`，都不應該出現 □。
+
 ## 4. 在新版程式碼中找到修改點（不要依賴檔名）
 
 官方可能再重構或搬檔。用以下關鍵字定位：
