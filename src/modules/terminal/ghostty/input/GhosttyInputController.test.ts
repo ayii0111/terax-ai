@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { FakeElement, FakeTextArea } from "./fakeTextArea";
 import {
   GhosttyInputController,
+  mouseEventButtons,
   terminalMouseModifiers,
 } from "./GhosttyInputController";
 
@@ -466,6 +467,44 @@ describe("GhosttyInputController", () => {
       "\x1b[<32;2;2M",
     );
     controller.dispose();
+  });
+
+  it("stops reporting button motion once the pressed button is no longer held", () => {
+    const input = new FakeTextArea();
+    const pointerTarget = new FakeElement();
+    const onData = vi.fn();
+    const controller = new GhosttyInputController({
+      model: inputModel((mode) => mode === 1002 || mode === 1006),
+      input: input as unknown as HTMLTextAreaElement,
+      pointerTarget: pointerTarget as unknown as HTMLElement,
+      cellSize: () => ({ width: 10, height: 20 }),
+      onData,
+      onCopy: () => false,
+      isMac: false,
+    });
+    const reports = () =>
+      onData.mock.calls.map(([data]) => new TextDecoder().decode(data));
+
+    pointerTarget.dispatchEvent(
+      mouseEvent("mousedown", { clientX: 15, clientY: 25, buttons: 1 }),
+    );
+    pointerTarget.dispatchEvent(
+      mouseEvent("mousemove", { clientX: 25, clientY: 25, buttons: 1 }),
+    );
+    // The mouseup landed outside the pane; hover must not read as a drag.
+    pointerTarget.dispatchEvent(
+      mouseEvent("mousemove", { clientX: 35, clientY: 25, buttons: 0 }),
+    );
+    expect(reports()).toEqual(["\x1b[<0;2;2M", "\x1b[<32;3;2M"]);
+    controller.dispose();
+  });
+
+  it("maps MouseEvent.buttons onto the 1 << button layout", () => {
+    expect(mouseEventButtons(1)).toBe(1);
+    expect(mouseEventButtons(2)).toBe(4);
+    expect(mouseEventButtons(4)).toBe(2);
+    expect(mouseEventButtons(7)).toBe(7);
+    expect(mouseEventButtons(0)).toBe(0);
   });
 
   it("reports one wheel step per scrolled line for pixel deltas under mouse tracking", () => {

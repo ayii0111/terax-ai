@@ -82,6 +82,18 @@ IME 組字中（`isComposing` / `compositionstart`～`compositionend`）**不可
 - **先看官方是否已修**：如果官方把 symbol 字型加回來，或已改用其他方式載入已安裝字型，這個 commit 就拿掉。
 - **驗收**：字型設定留空，在 `zsh` 裡看 prompt 圖示，並執行 `eza --icons`，都不應該出現 □。
 
+## 3.3 客製化 #4：只是移動游標卻變成拖曳選取（commit `fix(terminal): end drags whose release never arrived`）
+
+- **行為**：放開觸控板或滑鼠後，單純移動游標不可以延伸反白選取，也不可以對 TUI 回報拖曳。
+- **原因**：結束拖曳只靠收到放開事件。只要漏掉一次（輕點觸控板時剛好碰上失焦、在 pane 外放開、放開時按著 Shift 等），狀態就會卡在「按著」。
+  - `TerminalSelectionController.ts` 的 `handlePointerMove` 只比對 `pointerId`，不看 `event.buttons` → shell 裡反白跟著游標跑（使用者實際遇到的情況）。
+  - `GhosttyInputController.ts` 的 `mouseButtons` 只在 `handleMouseUp` 清除，而它有好幾個提前 return → mouse tracking（1002）下會把移動回報成拖曳。
+- **修法**：每次 move 都用 `event.buttons` 校正。
+  - 選取：`(event.buttons & 1) === 0` 就呼叫 `endDrag`（從 `handlePointerUp` 拆出來的收尾邏輯，**不會**先把選取延伸到目前游標位置）。
+  - 輸入：`this.mouseButtons &= mouseEventButtons(event.buttons)`。注意 `buttons` 的位元是右鍵=2、中鍵=4，`1 << button` 是中鍵=2、右鍵=4，要靠 `mouseEventButtons` 轉換。
+- **測試**："ends a drag whose pointerup was lost instead of extending it on hover"、"stops reporting button motion once the pressed button is no longer held"、"maps MouseEvent.buttons onto the 1 << button layout"。selection 測試 fixture 的 `pointer()` 現在會帶 `buttons`（預設 `pointerup` 為 0，其餘為 1）。
+- **定位關鍵字**：`command rg -n "handlePointerMove|mouseButtons" src/modules/terminal/ghostty`
+
 ## 4. 在新版程式碼中找到修改點（不要依賴檔名）
 
 官方可能再重構或搬檔。用以下關鍵字定位：

@@ -431,6 +431,9 @@ export class GhosttyInputController {
   };
 
   private readonly handleMouseMove = (event: MouseEvent): void => {
+    // Forget presses whose mouseup never reached the pane, so plain hover is
+    // not reported as a drag.
+    this.mouseButtons &= mouseEventButtons(event.buttons);
     if (event.shiftKey) {
       this.lastMouseMotion = null;
       return;
@@ -637,6 +640,15 @@ export function terminalMouseModifiers(
   if (event.altKey) modifiers |= 8;
   if (event.ctrlKey) modifiers |= 16;
   return modifiers;
+}
+
+/**
+ * `MouseEvent.buttons` (primary 1, secondary 2, auxiliary 4) in the
+ * `1 << MouseEvent.button` layout of the pressed-button mask (auxiliary 2,
+ * secondary 4).
+ */
+export function mouseEventButtons(buttons: number): number {
+  return (buttons & 1) | ((buttons & 4) >> 1) | ((buttons & 2) << 1);
 }
 
 function modifiers(event: KeyboardEvent): Mods {

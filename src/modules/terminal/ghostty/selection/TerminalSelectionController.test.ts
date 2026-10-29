@@ -199,6 +199,23 @@ describe("terminal selection pointer ownership", () => {
     fixture.controller.dispose();
   });
 
+  it("ends a drag whose pointerup was lost instead of extending it on hover", () => {
+    const fixture = dragFixture();
+    fixture.pointer("pointerdown", 15);
+    fixture.pointer("pointermove", 45);
+    // The release never arrived; the next move reports no pressed button.
+    fixture.pointer("pointermove", 75, 10, 0);
+    const selected = {
+      anchor: { line: 0, column: 1 },
+      focus: { line: 0, column: 4 },
+      rectangular: false,
+    };
+    expect(fixture.controller.value).toEqual(selected);
+    fixture.pointer("pointermove", 95, 10, 0);
+    expect(fixture.controller.value).toEqual(selected);
+    fixture.controller.dispose();
+  });
+
   it("keeps the pending anchor pinned across reflow and discards it on lost capture", () => {
     const fixture = dragFixture();
     fixture.pointer("pointerdown", 15);
@@ -340,11 +357,17 @@ function dragFixture(
     model,
     onChange,
     tracked: () => tracked,
-    pointer: (type: string, clientX: number, clientY = 10) =>
+    pointer: (
+      type: string,
+      clientX: number,
+      clientY = 10,
+      buttons = type === "pointerup" ? 0 : 1,
+    ) =>
       target.dispatchEvent(
         Object.assign(new Event(type, { cancelable: true }), {
           pointerId: 1,
           button: 0,
+          buttons,
           detail: 1,
           shiftKey: false,
           altKey: false,
