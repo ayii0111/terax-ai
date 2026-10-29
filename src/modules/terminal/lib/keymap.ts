@@ -25,6 +25,18 @@ export function terminalLineNavigationSequence(
   return null;
 }
 
+/** Option+Z → readline undo (Ctrl+_). macOS-only: Option+letter normally
+ * types a symbol there ("Ω"), so check event.code rather than event.key. */
+export function terminalUndoSequence(
+  event: TerminalKeyEvent,
+  opts: PlatformOpts,
+): string | null {
+  if (!opts.isMac) return null;
+  if (!event.altKey || event.ctrlKey || event.metaKey) return null;
+  if (event.code === "KeyZ") return "\x1f";
+  return null;
+}
+
 /** Modifier+Backspace deletion:
  *   macOS  Cmd+Backspace    → Ctrl+U (kill-to-line-start)
  *   macOS  Option+Backspace → Ctrl+W (kill-word-backward)
@@ -44,14 +56,17 @@ export function terminalDeleteSequence(
   return null;
 }
 
+/** Applied on the alternate screen too, matching Ghostty's own macOS
+ * defaults: TUIs such as Claude Code otherwise never see these chords,
+ * because unclaimed Command keys are left to the native menu. */
 export function terminalReadlineSequence(
   event: TerminalKeyEvent,
-  opts: PlatformOpts & { isAlternateScreen: boolean },
+  opts: PlatformOpts,
 ): string | null {
-  if (opts.isAlternateScreen) return null;
   return (
     terminalLineNavigationSequence(event, opts) ??
     terminalWordNavigationSequence(event) ??
-    terminalDeleteSequence(event, opts)
+    terminalDeleteSequence(event, opts) ??
+    terminalUndoSequence(event, opts)
   );
 }

@@ -4,9 +4,13 @@ import {
   terminalDeleteSequence,
   terminalLineNavigationSequence,
   terminalReadlineSequence,
+  terminalUndoSequence,
   terminalWordNavigationSequence,
   type TerminalKeyEvent,
 } from "./keymap";
+
+const MAC = { isMac: true };
+const OTHER = { isMac: false };
 
 const evt = (partial: Partial<TerminalKeyEvent>): TerminalKeyEvent => ({
   altKey: false,
@@ -154,26 +158,34 @@ describe("terminalReadlineSequence", () => {
       evt({ metaKey: true, key: "Backspace", code: "Backspace" }),
       "\x15",
     ],
+    ["undo", evt({ altKey: true, key: "Ω", code: "KeyZ" }), "\x1f"],
   ] as const;
 
-  it.each(remaps)(
-    "applies %s on the normal screen",
-    (_name, event, sequence) => {
-      expect(
-        terminalReadlineSequence(event, {
-          isMac: true,
-          isAlternateScreen: false,
-        }),
-      ).toBe(sequence);
-    },
-  );
+  it.each(remaps)("applies %s", (_name, event, sequence) => {
+    expect(terminalReadlineSequence(event, { isMac: true })).toBe(sequence);
+  });
+});
 
-  it.each(remaps)("suppresses %s on the alternate screen", (_name, event) => {
+describe("terminalUndoSequence", () => {
+  it("maps Option+Z to Ctrl+_ on macOS by physical key", () => {
+    for (const key of ["Ω", "z", "Dead"]) {
+      expect(
+        terminalUndoSequence(evt({ altKey: true, key, code: "KeyZ" }), MAC),
+      ).toBe("\x1f");
+    }
+  });
+
+  it("ignores other platforms and modifier mixes", () => {
+    const optZ = { altKey: true, key: "Ω", code: "KeyZ" };
+    expect(terminalUndoSequence(evt(optZ), OTHER)).toBeNull();
     expect(
-      terminalReadlineSequence(event, {
-        isMac: true,
-        isAlternateScreen: true,
-      }),
+      terminalUndoSequence(evt({ ...optZ, metaKey: true }), MAC),
+    ).toBeNull();
+    expect(
+      terminalUndoSequence(evt({ ...optZ, ctrlKey: true }), MAC),
+    ).toBeNull();
+    expect(
+      terminalUndoSequence(evt({ key: "z", code: "KeyZ" }), MAC),
     ).toBeNull();
   });
 });

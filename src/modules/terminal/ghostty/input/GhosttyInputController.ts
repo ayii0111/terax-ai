@@ -233,13 +233,15 @@ export class GhosttyInputController {
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     this.nativeSelection?.reset();
+    if (event.defaultPrevented || this.composing || event.isComposing) return;
+    // WKWebView tags Option+key with keyCode 229 / "Dead" even when no IME
+    // composition is running, so readline chords must get past that guard.
+    const readline = terminalReadlineSequence(event, { isMac: this.isMac });
     if (
-      event.defaultPrevented ||
-      this.composing ||
-      event.isComposing ||
-      event.keyCode === 229 ||
-      event.key === "Dead" ||
-      event.key === "Process"
+      !readline &&
+      (event.keyCode === 229 ||
+        event.key === "Dead" ||
+        event.key === "Process")
     )
       return;
 
@@ -258,10 +260,6 @@ export class GhosttyInputController {
       return;
     }
 
-    const readline = terminalReadlineSequence(event, {
-      isMac: this.isMac,
-      isAlternateScreen: this.options.model.modes().alternateScreen,
-    });
     if (readline) {
       consume(event);
       this.emitText(readline, "keydown");

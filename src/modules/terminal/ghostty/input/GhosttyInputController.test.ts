@@ -467,6 +467,77 @@ describe("GhosttyInputController", () => {
     );
     controller.dispose();
   });
+
+  it.each([false, true])(
+    "delivers macOS readline chords tagged as keyCode 229 (alternate screen: %s)",
+    (alternateScreen) => {
+      const input = new FakeTextArea();
+      const onData = vi.fn();
+      const base = inputModel();
+      const controller = new GhosttyInputController({
+        model: {
+          ...base,
+          modes: () => ({ ...base.modes(), alternateScreen }),
+        },
+        input: input as unknown as HTMLTextAreaElement,
+        pointerTarget: new FakeElement() as unknown as HTMLElement,
+        cellSize: () => ({ width: 10, height: 20 }),
+        isMac: true,
+        onCopy: () => false,
+        onData,
+      });
+      try {
+        for (const [values, sequence] of [
+          [{ key: "ArrowLeft", code: "ArrowLeft", altKey: true }, "\x1bb"],
+          [{ key: "ArrowRight", code: "ArrowRight", altKey: true }, "\x1bf"],
+          [{ key: "Backspace", code: "Backspace", altKey: true }, "\x17"],
+          [{ key: "Ω", code: "KeyZ", altKey: true }, "\x1f"],
+          [{ key: "ArrowLeft", code: "ArrowLeft", metaKey: true }, "\x01"],
+          [{ key: "ArrowRight", code: "ArrowRight", metaKey: true }, "\x05"],
+          [{ key: "Backspace", code: "Backspace", metaKey: true }, "\x15"],
+        ] as const) {
+          for (const keyCode of [0, 229]) {
+            const event = keyboardEvent({ ...values, keyCode });
+            input.dispatchEvent(event);
+            expect(event.defaultPrevented).toBe(true);
+            expect(new TextDecoder().decode(onData.mock.lastCall?.[0])).toBe(
+              sequence,
+            );
+          }
+        }
+      } finally {
+        controller.dispose();
+      }
+    },
+  );
+
+  it("keeps readline chords out of an active IME composition", () => {
+    const input = new FakeTextArea();
+    const onData = vi.fn();
+    const controller = new GhosttyInputController({
+      model: inputModel(),
+      input: input as unknown as HTMLTextAreaElement,
+      pointerTarget: new FakeElement() as unknown as HTMLElement,
+      cellSize: () => ({ width: 10, height: 20 }),
+      isMac: true,
+      onCopy: () => false,
+      onData,
+    });
+    try {
+      const event = keyboardEvent({
+        key: "ArrowLeft",
+        code: "ArrowLeft",
+        altKey: true,
+        keyCode: 229,
+        isComposing: true,
+      });
+      input.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+      expect(onData).not.toHaveBeenCalled();
+    } finally {
+      controller.dispose();
+    }
+  });
 });
 
 function inputModel(
