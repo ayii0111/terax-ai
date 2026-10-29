@@ -468,6 +468,48 @@ describe("GhosttyInputController", () => {
     controller.dispose();
   });
 
+  it("reports one wheel step per scrolled line for pixel deltas under mouse tracking", () => {
+    vi.stubGlobal("WheelEvent", {
+      DOM_DELTA_PIXEL: 0,
+      DOM_DELTA_LINE: 1,
+      DOM_DELTA_PAGE: 2,
+    });
+    const input = new FakeTextArea();
+    const pointerTarget = new FakeElement();
+    const onData = vi.fn();
+    const controller = new GhosttyInputController({
+      model: inputModel((mode) => mode === 1006),
+      input: input as unknown as HTMLTextAreaElement,
+      pointerTarget: pointerTarget as unknown as HTMLElement,
+      cellSize: () => ({ width: 10, height: 20 }),
+      onData,
+      onCopy: () => false,
+      isMac: false,
+    });
+    const wheel = (deltaY: number) => {
+      onData.mockClear();
+      pointerTarget.dispatchEvent(
+        wheelEvent({ clientX: 15, clientY: 25, deltaY }),
+      );
+      return onData.mock.calls.map(([data]) => new TextDecoder().decode(data));
+    };
+
+    // Trackpad-sized deltas accumulate until a full 20 px cell is scrolled.
+    expect(wheel(6)).toEqual([]);
+    expect(wheel(6)).toEqual([]);
+    expect(wheel(6)).toEqual([]);
+    expect(wheel(6)).toEqual(["\x1b[<65;2;2M"]);
+    // A large delta reports every line it covers.
+    expect(wheel(-50)).toEqual(Array(2).fill("\x1b[<64;2;2M"));
+    expect(wheel(-10)).toEqual(["\x1b[<64;2;2M"]);
+    // Reversing direction discards the leftover from the other way.
+    expect(wheel(18)).toEqual([]);
+    // Horizontal-only events never report a vertical step.
+    expect(wheel(0)).toEqual([]);
+    controller.dispose();
+    vi.unstubAllGlobals();
+  });
+
   it.each([false, true])(
     "delivers macOS readline chords tagged as keyCode 229 (alternate screen: %s)",
     (alternateScreen) => {
@@ -578,6 +620,15 @@ function keyboardEvent(
     shiftKey: false,
     ...values,
   }) as KeyboardEvent;
+}
+
+function wheelEvent(values: Partial<WheelEvent>): WheelEvent {
+  return Object.assign(mouseEvent("wheel", values), {
+    deltaMode: 0,
+    deltaX: 0,
+    deltaY: 0,
+    ...values,
+  }) as WheelEvent;
 }
 
 function mouseEvent(type: string, values: Partial<MouseEvent>): MouseEvent {

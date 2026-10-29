@@ -60,6 +60,15 @@ IME 組字中（`isComposing` / `compositionstart`～`compositionend`）**不可
   - `GhosttyInputController.test.ts`：7 個按鍵 × `keyCode` 0/229 × 一般畫面/alternate screen，都要送出正確位元組；組字中不可送出。
   - 已驗證：拿掉修改後，這些測試會失敗 5 個（測試確實能抓到修改遺失）。
 
+## 3.1 客製化 #2：觸控板捲動在 TUI 裡一次跳好幾格（commit `fix(terminal): scale trackpad wheel reports to scrolled lines under mouse tracking`）
+
+- **行為**：在 cc 這類開了 mouse tracking 的 TUI 裡雙指滑動，捲動量要跟手指移動距離成正比，輕滑能只捲一步。
+- **原因**：`GhosttyInputController.ts` 的 `handleWheel` 在 mouse tracking 模式下，**每個 wheel 事件固定送一次** 64/65 滾輪回報，完全不看 `deltaY`。觸控板一次滑動會送出幾十個小像素事件（再加慣性），所以一滑就飛走。`deltaY === 0`（純橫向）還會被當成往下捲。一般 shell 捲回歷史那條路本來就有用 `deltaY / cellHeight` 累積，沒問題。
+- **修法**：把「像素 → 行數、不滿一行留給下個事件」抽成 `wheelLines()`，兩條路共用；mouse tracking 改成每捲一行送一次回報。反向滑動時清掉舊的餘數，避免要先「還」掉反方向的量。
+- **測試**：`GhosttyInputController.test.ts` 的 "reports one wheel step per scrolled line for pixel deltas under mouse tracking"。
+- **定位關鍵字**：`command rg -n "deltaY < 0 \? 64 : 65|handleWheel|wheelRemainder" src`
+- **驗收**：在 `claude` 裡輸出夠長的內容後，雙指慢慢往上滑，畫面應該一步一步捲，不會一下跳好幾格。外接滑鼠滾一格也要確認仍會捲動。
+
 ## 4. 在新版程式碼中找到修改點（不要依賴檔名）
 
 官方可能再重構或搬檔。用以下關鍵字定位：

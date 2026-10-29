@@ -467,17 +467,29 @@ export class GhosttyInputController {
       const position = this.mousePosition(event);
       if (!position) return;
       consume(event);
-      this.sendMouse(
-        event.deltaY < 0 ? 64 : 65,
-        position.col,
-        position.row,
-        false,
-        event,
-      );
+      // A trackpad delivers many small pixel deltas per swipe, so report one
+      // wheel step per scrolled line instead of one per event.
+      const lines = this.wheelLines(event);
+      for (let step = 0; step < Math.abs(lines); step += 1) {
+        this.sendMouse(
+          lines < 0 ? 64 : 65,
+          position.col,
+          position.row,
+          false,
+          event,
+        );
+      }
       return;
     }
 
     if (this.options.model.scrollPosition().history === 0) return;
+    const lines = this.wheelLines(event);
+    if (lines !== 0) this.options.model.scrollBy(lines);
+    consume(event);
+  };
+
+  /** Whole lines scrolled by `event`; sub-line pixel deltas carry over to the next event. */
+  private wheelLines(event: WheelEvent): number {
     const cellHeight = Math.max(1, this.options.cellSize().height);
     const delta =
       event.deltaMode === WheelEvent.DOM_DELTA_LINE
@@ -485,15 +497,16 @@ export class GhosttyInputController {
         : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
           ? event.deltaY * this.options.model.rows
           : event.deltaY / cellHeight;
+    // A reversed swipe starts fresh rather than first paying back the old remainder.
+    if (delta * this.wheelRemainder < 0) this.wheelRemainder = 0;
     this.wheelRemainder += delta;
     const lines =
       this.wheelRemainder < 0
         ? Math.ceil(this.wheelRemainder)
         : Math.floor(this.wheelRemainder);
     this.wheelRemainder -= lines;
-    if (lines !== 0) this.options.model.scrollBy(lines);
-    consume(event);
-  };
+    return lines;
+  }
 
   private mousePosition(
     event: MouseEvent,
