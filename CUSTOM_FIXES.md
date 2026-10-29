@@ -94,7 +94,7 @@ command pnpm tauri build --bundles app
 
 ## 6. 安裝
 
-- 產出：`src-tauri/target/release/bundle/macos/Terax.app`
+- 產出：`src-tauri/target/release/bundle/macos/Terax.app`。最後的 `TAURI_SIGNING_PRIVATE_KEY` 錯誤是 updater 簽章步驟，沒有官方金鑰時一定會出現，可以忽略，`.app` 本體已經建好。
 - 安裝前先備份現有 app：`/Applications/Terax.app` → `/Applications/Terax-<版本>-custom.app.bak`（舊的客製版可以直接回退）。
 - 未簽章：第一次開若被 Gatekeeper 擋，執行 `command xattr -dr com.apple.quarantine /Applications/Terax.app`。
 - **自動更新會蓋掉客製版**：官方 updater 若提示更新，不要按，改走第 5 節流程。
