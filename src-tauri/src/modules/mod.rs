@@ -14,7 +14,6 @@ pub mod lsp;
 #[cfg(target_os = "macos")]
 pub mod mouse_input_context;
 pub mod net;
-pub mod pointer_trace;
 pub mod proc;
 pub mod pty;
 pub mod runtime;

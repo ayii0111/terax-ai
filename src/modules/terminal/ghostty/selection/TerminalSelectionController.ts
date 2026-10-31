@@ -3,7 +3,6 @@ import type {
   TerminalBufferPoint,
   TerminalBufferSelection,
 } from "../GhosttyTerminalModel";
-import { tracePaneLabel, tracePointer } from "../input/pointerTrace";
 
 type SelectionMode = "character" | "word" | "line";
 
@@ -130,20 +129,8 @@ export class TerminalSelectionController {
   }
 
   private readonly handleLostCapture = (event: PointerEvent): void => {
-    if (event.pointerId === this.pointerId) {
-      this.traceDrag(`pane:selection-${event.type}`, event);
-      this.suspend();
-    }
+    if (event.pointerId === this.pointerId) this.suspend();
   };
-
-  private traceDrag(name: string, event: PointerEvent): void {
-    tracePointer(name, {
-      leaf: tracePaneLabel(this.options.target),
-      buttons: event.buttons,
-      shift: event.shiftKey,
-      meaningful: this.meaningful,
-    });
-  }
 
   private readonly handlePointerDown = (event: PointerEvent): void => {
     if (
@@ -160,7 +147,6 @@ export class TerminalSelectionController {
     if (!point) return;
     event.preventDefault();
     event.stopPropagation();
-    this.traceDrag("pane:selection-start", event);
     this.pointerId = event.pointerId;
     this.options.target.setPointerCapture(event.pointerId);
     this.lastClientX = event.clientX;
@@ -189,7 +175,6 @@ export class TerminalSelectionController {
     // A lost pointerup (tap-to-click racing a focus change, a release the
     // capture missed) would otherwise leave hover extending the selection.
     if ((event.buttons & 1) === 0) {
-      this.traceDrag("ANOMALY:selection-release-lost", event);
       this.endDrag(event.pointerId);
       return;
     }
@@ -202,7 +187,6 @@ export class TerminalSelectionController {
 
   private readonly handlePointerUp = (event: PointerEvent): void => {
     if (event.pointerId !== this.pointerId) return;
-    this.traceDrag("pane:selection-end", event);
     event.preventDefault();
     this.updateFocus(event);
     this.endDrag(event.pointerId);

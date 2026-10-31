@@ -122,7 +122,6 @@ IME 組字中（`isComposing` / `compositionstart`～`compositionend`）**不可
 - **驗收**：在 shell、`claude`、`.md` 分頁各試一次：三指拖曳選字，手指不離開時按 F6 或 ⌘C，放開後單指移動游標，選取不可跟著跑。
 - **合併衝突時**：
   - 這個修法是獨立新檔，幾乎只有 `main.tsx` 會衝突。原則是 `installDragKeyGuard()` 要在 `render` 之前呼叫，才會先於會 `stopImmediatePropagation` 的全域快捷鍵（`useGlobalShortcuts.ts`）。
-  - 如果 3.5 的 trace 已移除，改成不帶參數呼叫。
   - 官方若重寫拖曳，確認每個 script 拖曳仍能被 `pointercancel` 或 `mouseup` 結束：`command rg -n "pointercancel|\"mouseup\"|onPointerCancel" src`。新增的拖曳要有 cancel 處理，且 cancel 不可提交（分頁排序、檔案移動）。
   - 官方若自己處理了按鍵結束拖曳，就拿掉這個 commit，再照上面的驗收確認。
 
@@ -153,12 +152,9 @@ IME 組字中（`isComposing` / `compositionstart`～`compositionend`）**不可
   - 三指拖曳選字、拖曳分頁排序正常；組字到一半點別的分頁，回來可繼續打字。
 - **合併衝突時**：這是獨立新檔，只有 `lib.rs` 的 `install` 呼叫與 `mod.rs` 可能衝突。若 WebKit 或 wry 改了 `inputContext` 判斷或類別結構，先照上面的驗收確認。官方若自己修好就拿掉這個 commit。
 
-## 3.5 暫時性診斷：拖曳黏著 trace（bug 解決後要移除，升級時不要 cherry-pick）
+## 3.5 暫時性診斷：拖曳黏著 trace（已移除）
 
-- **用途**：追查「單純移動游標卻變成拖曳」。#4 的修法上線後仍會發生，所以記錄 WebKit 實際送達的事件與 pane 控制器的狀態。目前留著追「事件順序顛倒」；移除時連同 `main.tsx` 傳給 `installDragKeyGuard` 的 callback 一起拿掉。
-- **輸出**：`~/Library/Logs/app.crynta.terax/pointer-trace.log`（8 MiB 輪替，保留一份 `.1.log`）。只記滑鼠、焦點、組字的狀態，**不記輸入內容**，按鍵只記 ⌘C 與標記組合鍵。發現問題時按 ⌃⌥⌘M 寫入 `USER-MARK`。
-- **程式**：`input/pointerTrace.ts`、`src-tauri/src/modules/pointer_trace.rs`，並在 `GhosttyInputController`、`TerminalSelectionController` 插入 `tracePointer` / `traceMouse` / `traceMotion` / `traceDrag`。
-- **定位關鍵字**：`command rg -n "pointerTrace|pointer_trace|traceMouse|traceMotion|traceDrag" src src-tauri/src`
+`3ecd7d0` 加入、#8 解決後移除。升級時這兩個 commit 都不要 cherry-pick。若拖曳黏著再次發生，可從 `3ecd7d0` 取回。
 
 ## 4. 在新版程式碼中找到修改點（不要依賴檔名）
 

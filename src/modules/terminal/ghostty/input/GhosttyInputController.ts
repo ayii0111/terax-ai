@@ -11,11 +11,6 @@ import { encodeTerminalPaste } from "./terminalInputEncoding";
 
 import { TerminalInputProxy } from "@/modules/terminal/ghostty/input/TerminalInputProxy";
 import { TerminalNativeSelection } from "@/modules/terminal/ghostty/input/TerminalNativeSelection";
-import {
-  MotionCoalescer,
-  tracePaneLabel,
-  tracePointer,
-} from "@/modules/terminal/ghostty/input/pointerTrace";
 
 const DUPLICATE_INPUT_WINDOW_MS = 75;
 
@@ -169,9 +164,6 @@ export class GhosttyInputController {
   private wheelRemainder = 0;
   private lastMouseMotion: string | null = null;
   private disposed = false;
-  /** Presses reported to the PTY with no release reported yet; the TUI still sees them held. */
-  private unreleasedPresses = 0;
-  private readonly motionTrace = new MotionCoalescer();
 
   constructor(private readonly options: GhosttyInputControllerOptions) {
     this.isMac = options.isMac ?? /Mac|iPhone|iPad/.test(navigator.userAgent);
@@ -419,36 +411,20 @@ export class GhosttyInputController {
   };
 
   private readonly handleMouseDown = (event: MouseEvent): void => {
-    if (!this.options.model.modes().mouseTracking || event.shiftKey) {
-      this.traceMouse("pane:mousedown-unreported", event);
-      return;
-    }
+    if (!this.options.model.modes().mouseTracking || event.shiftKey) return;
     const position = this.mousePosition(event);
-    if (!position) {
-      this.traceMouse("pane:mousedown-unreported", event);
-      return;
-    }
+    if (!position) return;
     this.mouseButtons |= 1 << event.button;
-    this.unreleasedPresses |= 1 << event.button;
-    this.traceMouse("pane:press-reported", event);
     this.lastMouseMotion = null;
     consume(event);
     this.sendMouse(event.button, position.col, position.row, false, event);
   };
 
   private readonly handleMouseUp = (event: MouseEvent): void => {
-    if (!this.options.model.modes().mouseTracking || event.shiftKey) {
-      this.traceMouse("pane:mouseup-unreported", event);
-      return;
-    }
+    if (!this.options.model.modes().mouseTracking || event.shiftKey) return;
     const position = this.mousePosition(event);
-    if (!position) {
-      this.traceMouse("pane:mouseup-unreported", event);
-      return;
-    }
+    if (!position) return;
     this.mouseButtons &= ~(1 << event.button);
-    this.unreleasedPresses &= ~(1 << event.button);
-    this.traceMouse("pane:release-reported", event);
     this.lastMouseMotion = null;
     consume(event);
     this.sendMouse(event.button, position.col, position.row, true, event);
@@ -457,20 +433,14 @@ export class GhosttyInputController {
   private readonly handleMouseMove = (event: MouseEvent): void => {
     // Forget presses whose mouseup never reached the pane, so plain hover is
     // not reported as a drag.
-    const held = this.mouseButtons;
     this.mouseButtons &= mouseEventButtons(event.buttons);
-    if (this.mouseButtons !== held) {
-      this.traceMouse("ANOMALY:tracking-release-lost", event, { was: held });
-    }
     if (event.shiftKey) {
-      this.traceMotion(event, "shift");
       this.lastMouseMotion = null;
       return;
     }
     const buttonMotion = this.options.model.mode(1002);
     const anyMotion = this.options.model.mode(1003);
     if (!anyMotion && (!buttonMotion || this.mouseButtons === 0)) {
-      this.traceMotion(event, "none");
       this.lastMouseMotion = null;
       return;
     }
@@ -480,7 +450,6 @@ export class GhosttyInputController {
     if ((this.mouseButtons & 1) !== 0) button += 0;
     else if ((this.mouseButtons & 2) !== 0) button += 1;
     else if ((this.mouseButtons & 4) !== 0) button += 2;
-    this.traceMotion(event, String(button));
     const signature = [
       button,
       position.col,
@@ -495,36 +464,6 @@ export class GhosttyInputController {
     this.lastMouseMotion = signature;
     this.sendMouse(button, position.col, position.row, false, event);
   };
-
-  private traceMouse(
-    name: string,
-    event: MouseEvent,
-    extra: Readonly<Record<string, number>> = {},
-  ): void {
-    const { model, pointerTarget } = this.options;
-    tracePointer(name, {
-      leaf: tracePaneLabel(pointerTarget),
-      button: event.button,
-      buttons: event.buttons,
-      shift: event.shiftKey,
-      held: this.mouseButtons,
-      unreleased: this.unreleasedPresses,
-      modes: [1000, 1002, 1003, 1006].filter((mode) => model.mode(mode)).join(),
-      ...extra,
-    });
-  }
-
-  /** `report` is the SGR button sent for this move, or why none was sent. */
-  private traceMotion(event: MouseEvent, report: string): void {
-    const folded = this.motionTrace.observe(
-      `${report}:${event.buttons}:${this.mouseButtons}:${this.unreleasedPresses}`,
-    );
-    if (folded === null) return;
-    this.traceMouse("pane:motion", event, {
-      report: report === "shift" || report === "none" ? -1 : Number(report),
-      folded,
-    });
-  }
 
   private readonly handleWheel = (event: WheelEvent): void => {
     if (this.options.model.modes().mouseTracking && !event.shiftKey) {
