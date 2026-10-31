@@ -367,6 +367,7 @@ pub fn run() {
             history::history_record,
             history::history_list,
             modules::fonts::terminal_nerd_font,
+            modules::pointer_trace::pointer_trace_append,
             vibrancy::window_backdrop_kind,
             vibrancy::window_set_backdrop,
             modules::window_presentation::window_presentation_state,

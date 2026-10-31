@@ -12,6 +12,7 @@ pub mod history;
 pub mod ipc_body;
 pub mod lsp;
 pub mod net;
+pub mod pointer_trace;
 pub mod proc;
 pub mod pty;
 pub mod runtime;

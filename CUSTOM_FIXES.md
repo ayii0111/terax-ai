@@ -135,6 +135,13 @@ IME 組字中（`isComposing` / `compositionstart`～`compositionend`）**不可
   - 校正 `mouseButtons` 時補送放開給 TUI。
   - `TabBar.tsx` 的拖曳加上 `buttons` 檢查和 `lostpointercapture` 處理。
 
+## 3.5 暫時性診斷：拖曳黏著 trace（bug 解決後要移除，升級時不要 cherry-pick）
+
+- **用途**：追查「單純移動游標卻變成拖曳」。#4 的修法上線後仍會發生，所以記錄 WebKit 實際送達的事件與 pane 控制器的狀態。目前留著追「事件順序顛倒」；移除時連同 `main.tsx` 傳給 `installDragKeyGuard` 的 callback 一起拿掉。
+- **輸出**：`~/Library/Logs/app.crynta.terax/pointer-trace.log`（8 MiB 輪替，保留一份 `.1.log`）。只記滑鼠、焦點、組字的狀態，**不記輸入內容**，按鍵只記 ⌘C 與標記組合鍵。發現問題時按 ⌃⌥⌘M 寫入 `USER-MARK`。
+- **程式**：`input/pointerTrace.ts`、`src-tauri/src/modules/pointer_trace.rs`，並在 `GhosttyInputController`、`TerminalSelectionController` 插入 `tracePointer` / `traceMouse` / `traceMotion` / `traceDrag`。
+- **定位關鍵字**：`command rg -n "pointerTrace|pointer_trace|traceMouse|traceMotion|traceDrag" src src-tauri/src`
+
 ## 4. 在新版程式碼中找到修改點（不要依賴檔名）
 
 官方可能再重構或搬檔。用以下關鍵字定位：

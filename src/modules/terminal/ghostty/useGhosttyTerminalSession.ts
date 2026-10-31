@@ -32,6 +32,7 @@ import { getWebGpuTerminalRuntime } from "./gpu/WebGpuTerminalRuntime";
 import { webGpuTerminalRuntimeDiagnostics } from "./gpu/WebGpuTerminalRuntime";
 import { WebGpuTerminalSurface } from "./gpu/WebGpuTerminalSurface";
 import { GhosttyInputController } from "./input/GhosttyInputController";
+import { tracePane } from "./input/pointerTrace";
 import { encodeTerminalSubmission } from "./input/terminalInputEncoding";
 import type {
   WebGlTerminalSurface,
@@ -847,6 +848,7 @@ function createGhosttyInput(
     blocks.paste(text);
     return true;
   };
+  tracePane(surface.eventTarget(), session.leafId);
   return new GhosttyInputController({
     model,
     input: surface.inputElement(),
