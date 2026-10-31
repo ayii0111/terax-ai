@@ -236,6 +236,7 @@ pub fn run() {
             }
             #[cfg(target_os = "macos")]
             if let Some(main) = _app.get_webview_window("main") {
+                modules::mouse_input_context::install(&main);
                 let handle = _app.handle().clone();
                 main.on_window_event(move |event| {
                     // CloseRequested can be cancelled by the frontend guard.

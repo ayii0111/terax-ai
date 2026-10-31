@@ -126,14 +126,32 @@ IME 組字中（`isComposing` / `compositionstart`～`compositionend`）**不可
   - 官方若重寫拖曳，確認每個 script 拖曳仍能被 `pointercancel` 或 `mouseup` 結束：`command rg -n "pointercancel|\"mouseup\"|onPointerCancel" src`。新增的拖曳要有 cancel 處理，且 cancel 不可提交（分頁排序、檔案移動）。
   - 官方若自己處理了按鍵結束拖曳，就拿掉這個 commit，再照上面的驗收確認。
 
-### 尚未解決：事件順序顛倒（與 #6 不同原因）
+## 3.4.3 客製化 #8：輕點分頁沒切換，分頁還黏在游標上（commit `fix(app): keep mouse events in order while a text field is focused`，`src-tauri/src/modules/mouse_input_context.rs`）
 
-- **現象**：輕點偶爾會變成「放開先到、按下後到」，按下帶 `buttons=0`，後面沒有放開。發生在雙擊後立刻移動，或連續點不同分頁標籤時。
-- **後果**：cc 收到按下卻沒收到放開，移動就被當成拖曳；分頁列的 `drag.current` 留著，移動超過 4px 就變成排序。只有按鍵觸發的情況才會被 #6 順帶結束。
-- **目前狀態**：成因沒查、也還沒修。想好的防護有三項，都還沒寫：
-  - `GhosttyInputController.handleMouseMove` 沒按鍵時改送 `35`（現在送 `32`，cc 會當成拖曳；要一併改現有測試裡的 `<32`）。
-  - 校正 `mouseButtons` 時補送放開給 TUI。
-  - `TabBar.tsx` 的拖曳加上 `buttons` 檢查和 `lostpointercapture` 處理。
+- **狀態**：2026-10-31 使用者實機確認解決。新版 log 按下 41 次、放開 41 次，順序全部正確。
+- **別再重新排查（分層測試結果）**，以下都是鼠鬚管、不到 1ms 的輕點，「顛倒數/次數」：
+
+  | 環境 | 結果 |
+  |---|---|
+  | Terax | 7/7 |
+  | 純 WKWebView＋有焦點的文字框 | 8/8 |
+  | 同上，加上本修法 | 0/10 |
+  | 純 WKWebView，無文字框 | 0/3 |
+  | tao＋wry，無文字框 | 0/8 |
+
+  - `CGEventTap` 與 App 層看到的順序一直正確，所以不是 macOS，也不是 Tauri、wry、tao。
+  - 系統注音 0/4，樣本少，且當時實際輸入法未驗證。鼠鬚管 master 的 `recognizedEvents` 只有 `keyDown`、`flagsChanged`，它為何造成亂序仍未知。
+- **行為**：輕點一定是先按下、後放開；分頁會切換，不會黏在游標上，cc 也不會把移動當成拖曳。
+- **原因**：macOS 的輕點有約 17ms 與不到 1ms 兩種。焦點在可編輯元素時，WebKit 的 `WebViewImpl::nativeMouseEventHandler` 會把滑鼠事件交給 `-[NSTextInputContext handleEvent:completionHandler:]`，等回呼才送給網頁；不到 1ms 的那種在鼠鬚管下會變成放開先到。`TabBar.tsx` 先收到放開就不切換，再收到按下就等一個不會來的放開。下一次輕點 WebKit 也不會送 `pointerdown`。
+- **修法**：`main` 視窗的 web view 類別上，覆寫 12 個滑鼠 selector 與 `inputContext`。處理滑鼠事件的當下 `inputContext` 回傳 nil，WebKit 就直接同步送出；打字與組字仍看到原本的值。移動事件也要涵蓋，否則還在排隊的移動會排到按下之後，帶著 `buttons=0` 打斷選取。
+- **類別不要用名稱查**：wry 的執行期類別名稱是 `wry::wkwebview::class::wry_web_view::WryWebView0.57.0`，會隨版本變動，要從實例取 `-class`。
+- **測試**：`mouse_input_context.rs` 的 "hides_the_input_context_only_during_mouse_calls"。
+- **定位關鍵字**：`command rg -n "mouse_input_context" src-tauri/src`；WebKit 端看 `nativeMouseEventHandler`。
+- **驗收**：
+  - 啟動後 `Terax.log` 要有 `mouse events bypass the input context`，沒有就代表 hook 沒裝上。
+  - 用鼠鬚管、觸控板輕點不同分頁 20 次，每次都切換且不黏著。
+  - 三指拖曳選字、拖曳分頁排序正常；組字到一半點別的分頁，回來可繼續打字。
+- **合併衝突時**：這是獨立新檔，只有 `lib.rs` 的 `install` 呼叫與 `mod.rs` 可能衝突。若 WebKit 或 wry 改了 `inputContext` 判斷或類別結構，先照上面的驗收確認。官方若自己修好就拿掉這個 commit。
 
 ## 3.5 暫時性診斷：拖曳黏著 trace（bug 解決後要移除，升級時不要 cherry-pick）
 
@@ -198,4 +216,4 @@ command pnpm tauri build --bundles app
 - 2026-07：0.8.x，修在 `rendererPool.ts` + xterm patch（fork 分支 `fix/option-arrow-keycode-229`、`fix/ime-fullwidth-first-char-keydownseen`，筆記在該分支的 `FIX_NOTES.md`）。
 - 2026-08：merge 官方新版後功能全失效（原因：修改和官方更新混在同一個 commit，且官方改了檔案結構）。
 - 2026-10-29：0.9.0 換成 libghostty，舊修法的檔案都不存在了。改在 `GhosttyInputController.ts` 重做，建立本文件與 `custom` 分支模式。
-- 2026-10-31：找到三指拖曳中按鍵造成拖曳黏著的根源，加上 `dragKeyGuard`（#6）。事件順序顛倒仍未解決（見 3.4.1 末段）。
+- 2026-10-31：找到三指拖曳中按鍵造成拖曳黏著的根源，加上 `dragKeyGuard`（#6）。同日查出事件順序顛倒是 WebKit 的輸入法路徑加上鼠鬚管所致，以 `mouse_input_context` 解決（#8）。
