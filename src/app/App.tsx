@@ -82,7 +82,7 @@ import {
   useWindowTitle,
   useWorkspaceCwd,
 } from "@/modules/tabs";
-import { DEFAULT_SPACE_ID } from "@/modules/tabs/lib/useTabs";
+import { DEFAULT_SPACE_ID, pickAdjacentTab } from "@/modules/tabs/lib/useTabs";
 import {
   clearFocusedTerminal,
   disposeSession,
@@ -528,6 +528,19 @@ export default function App() {
     setActive(spaces[next].id);
   }, []);
 
+  const selectAdjacentTab = useCallback(
+    (delta: 1 | -1) => {
+      const tab = pickAdjacentTab(
+        tabsRef.current,
+        activeId,
+        delta,
+        activeSpaceId ?? DEFAULT_SPACE_ID,
+      );
+      if (tab) setActiveId(tab.id);
+    },
+    [activeId, activeSpaceId, setActiveId],
+  );
+
   const captureActiveSelection = useCallback((): string | null => {
     const t = tabs.find((x) => x.id === activeId);
     if (!t) return null;
@@ -903,6 +916,8 @@ export default function App() {
       "tab.close": handleCloseTabOrPane,
       "tab.next": () => stepSwitcher(1),
       "tab.prev": () => stepSwitcher(-1),
+      "tab.left": () => selectAdjacentTab(-1),
+      "tab.right": () => selectAdjacentTab(1),
       "tab.selectByIndex": (e) =>
         selectByIndex(
           parseInt(e.key, 10) - 1,
@@ -967,6 +982,7 @@ export default function App() {
       activeId,
       openCommandPalette,
       stepSwitcher,
+      selectAdjacentTab,
       cycleSpace,
       handleCloseTabOrPane,
       openNewTab,

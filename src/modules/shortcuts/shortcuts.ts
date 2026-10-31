@@ -15,6 +15,8 @@ export type ShortcutId =
   | "tab.close"
   | "tab.next"
   | "tab.prev"
+  | "tab.left"
+  | "tab.right"
   | "tab.selectByIndex"
   | "space.next"
   | "space.prev"
@@ -233,6 +235,20 @@ export const SHORTCUTS: Shortcut[] = [
     allowRepeat: true,
   },
   {
+    id: "tab.left",
+    label: "Tab to the left",
+    group: "Tabs",
+    defaultBindings: [{ meta: true, ctrl: true, key: "[" }],
+    allowRepeat: true,
+  },
+  {
+    id: "tab.right",
+    label: "Tab to the right",
+    group: "Tabs",
+    defaultBindings: [{ meta: true, ctrl: true, key: "]" }],
+    allowRepeat: true,
+  },
+  {
     id: "tab.selectByIndex",
     label: "Jump to tab 1–9",
     group: "Tabs",
@@ -421,8 +437,9 @@ const CODE_TO_KEY: Record<string, string> = {
   Space: " ",
 };
 
-// Option and Shift combinations rewrite e.key (macOS Option gives "«", "…",
-// dead keys; Shift turns "." into ">"); the physical key survives in e.code.
+// Option, Shift and Control combinations rewrite e.key (macOS Option gives "«",
+// "…", dead keys; Shift turns "." into ">"; Control+[ is the ESC control
+// character); the physical key survives in e.code.
 function keyFromCode(code: string): string | null {
   if (code.startsWith("Key")) return code.slice(3).toLowerCase();
   if (code.startsWith("Digit")) return code.slice(5);
@@ -441,7 +458,9 @@ export function matchBinding(
   if (id === "tab.selectByIndex") {
     if (!/^[1-9]$/.test(e.key)) return false;
   } else if (eventKey !== bindingKey) {
-    if (!binding.alt && !binding.shift) return false;
+    const rewritesKey =
+      binding.alt || binding.shift || (binding.ctrl && binding.meta);
+    if (!rewritesKey) return false;
     if (keyFromCode(e.code) !== bindingKey) return false;
   }
 

@@ -115,6 +115,32 @@ describe("matchBinding", () => {
     ).toBe(false);
   });
 
+  it("falls back to the physical code for Cmd+Ctrl combinations", () => {
+    // Ctrl+[ is the ESC control character, which e.key may report instead.
+    expect(
+      matchBinding(
+        event({
+          key: "Escape",
+          code: "BracketLeft",
+          ctrlKey: true,
+          metaKey: true,
+        }),
+        { key: "[", ctrl: true, meta: true },
+      ),
+    ).toBe(true);
+    expect(
+      matchBinding(
+        event({
+          key: "Escape",
+          code: "Escape",
+          ctrlKey: true,
+          metaKey: true,
+        }),
+        { key: "[", ctrl: true, meta: true },
+      ),
+    ).toBe(false);
+  });
+
   it("does not fall back to the physical code without alt or shift", () => {
     expect(
       matchBinding(event({ key: "ç", code: "KeyC", metaKey: true }), {
@@ -122,6 +148,29 @@ describe("matchBinding", () => {
         meta: true,
       }),
     ).toBe(false);
+    expect(
+      matchBinding(event({ key: "ç", code: "KeyC", ctrlKey: true }), {
+        key: "c",
+        ctrl: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("binds adjacent tab switching to Cmd+Ctrl+[ and ], leaving spaces alone", () => {
+    const bindings = (id: string) =>
+      SHORTCUTS.find((s) => s.id === id)?.defaultBindings;
+    expect(bindings("tab.left")).toEqual([
+      { meta: true, ctrl: true, key: "[" },
+    ]);
+    expect(bindings("tab.right")).toEqual([
+      { meta: true, ctrl: true, key: "]" },
+    ]);
+    expect(bindings("space.prev")).toEqual([
+      { [MOD_PROP]: true, shift: true, key: "[" },
+    ]);
+    expect(bindings("space.next")).toEqual([
+      { [MOD_PROP]: true, shift: true, key: "]" },
+    ]);
   });
 
   it("only accepts digit keys for the jump-to-tab shortcut", () => {

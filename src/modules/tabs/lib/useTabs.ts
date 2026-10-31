@@ -308,6 +308,21 @@ export function pickTabBySpaceIndex(
   return pool[idx];
 }
 
+// Returns the tab beside `activeId` in strip order within the given space,
+// wrapping at the ends. Undefined when the active tab isn't in that space or
+// has no other tab to move to.
+export function pickAdjacentTab(
+  tabs: Tab[],
+  activeId: number,
+  delta: 1 | -1,
+  spaceId: string,
+): Tab | undefined {
+  const pool = tabs.filter((t) => t.spaceId === spaceId);
+  const idx = pool.findIndex((t) => t.id === activeId);
+  if (idx === -1 || pool.length < 2) return undefined;
+  return pool[(idx + delta + pool.length) % pool.length];
+}
+
 // Next active after close, scoped to the closing tab's space. null = last tab of
 // its space, which callers treat as "refuse to close".
 export function nextActiveInSpace(

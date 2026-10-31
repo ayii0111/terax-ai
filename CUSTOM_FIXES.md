@@ -179,6 +179,20 @@ IME 組字中（`isComposing` / `compositionstart`～`compositionend`）**不可
 - **驗收**：亮暗主題都試，WebGPU 和 WebGL 都要一樣：方塊停在英文、中文、彩色文字上都看得清楚；分割窗格與視窗縮小時，換色範圍仍對齊方塊。
 - **合併衝突時**：官方若改了 `Screen` 的版面，`SCREEN_OFFSET`、WGSL struct、`SCREEN_UNIFORM_BYTES` 要一起改，`ScreenUniform.test.ts` 會檢查三者一致。
 
+## 3.4.5 客製化 #10：快捷鍵切換左右相鄰分頁（commit `feat(tabs): switch to the adjacent tab with Cmd+Ctrl+brackets`）
+
+- **行為**：`⌘⌃[` / `⌘⌃]` 激活當前 Space 內，標籤列上左邊/右邊的分頁。到兩端會繞回另一端，按住可連續切換，不跳切換面板。可在設定頁 Tabs 群組改鍵。
+- **為什麼不用 `⌘⇧[` / `]`**：那組已是 `space.prev` / `space.next`。官方的 `SHORTCUT_GROUPS` 漏列 `"Spaces"`，所以設定頁看不到也改不了。使用者決定在官方開放設定前不動 Space 的快捷鍵，所以**不要**把 `"Spaces"` 補進清單，也不要改它的預設鍵。
+- **為什麼不重用 `tab.next` / `tab.prev`**：`Ctrl+Tab` 是最近使用順序的切換面板，不是標籤列順序。
+- **修法**：
+  - `useTabs.ts` 的 `pickAdjacentTab`：純函式，負責 Space 篩選與繞回。
+  - `shortcuts.ts`：新增 `tab.left` / `tab.right`，綁定明確寫 `meta` + `ctrl`，不用 `MOD_PROP`，否則非 macOS 上會變成 `Ctrl+[`，而那是終端機的 ESC。
+  - `matchBinding`：綁定同時有 `ctrl` 和 `meta` 時也比對 `e.code`，因為 Control 可能改寫 `e.key`（`Ctrl+[` 是 ESC 控制字元）。
+- **測試**：`pickAdjacentTab.test.ts`；`shortcuts.test.ts` 的 "falls back to the physical code for Cmd+Ctrl combinations"、"binds adjacent tab switching …"。
+- **定位關鍵字**：`command rg -n "pickAdjacentTab|tab\.left|tab\.right" src`
+- **先看官方是否已修**：官方若新增標籤列順序的切換動作，就改用官方動作並拿掉這個 commit；若官方開放 Space 設定，再問使用者要不要調整。
+- **驗收**：開三個分頁，分別在 zsh、`claude`、編輯器分頁按 `⌘⌃[` / `⌘⌃]`，要依標籤列順序切換並繞回，按鍵不可輸入到終端；拖曳分頁改順序後要照新順序；`⌘⇧[` / `]` 仍是切換 Space。
+
 ## 3.5 暫時性診斷：拖曳黏著 trace（已移除）
 
 `3ecd7d0` 加入、#8 解決後移除。升級時這兩個 commit 都不要 cherry-pick。若拖曳黏著再次發生，可從 `3ecd7d0` 取回。
