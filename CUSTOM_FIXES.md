@@ -125,6 +125,18 @@ IME 組字中（`isComposing` / `compositionstart`～`compositionend`）**不可
   - 官方若重寫拖曳，確認每個 script 拖曳仍能被 `pointercancel` 或 `mouseup` 結束：`command rg -n "pointercancel|\"mouseup\"|onPointerCancel" src`。新增的拖曳要有 cancel 處理，且 cancel 不可提交（分頁排序、檔案移動）。
   - 官方若自己處理了按鍵結束拖曳，就拿掉這個 commit，再照上面的驗收確認。
 
+## 3.4.2 客製化 #7：輸入法組字視窗跑到終端左上角（commit `fix(terminal): keep the input on the cursor cell for IME windows`）
+
+- **行為**：用中文輸入法組字時，組字與選字視窗要出現在終端游標旁邊，WebGPU 和 WebGL 都一樣。
+- **原因**：系統依焦點輸入框的文字位置放置輸入法視窗，而兩個 surface 的隱藏 `textarea` 都寫死 `left:0;top:0;width:1px;height:1px`。用 WKWebView 探測 `firstRectForCharacterRange` 可重現：舊樣式回報 `x≈6～10, y≈1`，而且 1px 寬會讓文字逐字折行，組字起點的座標還會跑到視窗外（`y=-181`）。
+- **修法**：`input/terminalInputAnchor.ts`
+  - `TERMINAL_INPUT_STYLE`：兩個 surface 共用，去掉 padding、border，不折行。
+  - `terminalInputAnchor`：算出游標格的位置，寬度延伸到行尾，高度與行高等於格高，組字文字才不會捲動。游標隱藏時也要跟（cc 這類 TUI 會隱藏游標）。
+  - `applyTerminalInputAnchor`：每個 frame 呼叫，只寫有變動的屬性；`pointerEvents === "auto"` 代表 `TerminalNativeSelection` 正把輸入框借給右鍵選單，此時不動。
+- **測試**：`terminalInputAnchor.test.ts`，以及兩個 surface 測試的 "keeps the input on the cursor cell …"。
+- **定位關鍵字**：`command rg -n "terminalInputAnchor|TERMINAL_INPUT_STYLE" src`，以及 `command rg -n "position:absolute;left:0;top:0;width:1px" src`（官方若改動樣式，先查這個）。
+- **驗收**：分別在 zsh 和 `claude` 輸入框用中文輸入法打字，組字視窗要在游標旁；換行、分割窗格後也一樣；右鍵選單的「拷貝」仍可用。
+
 ## 3.4.3 客製化 #8：輕點分頁沒切換，分頁還黏在游標上（commit `fix(app): keep mouse events in order while a text field is focused`，`src-tauri/src/modules/mouse_input_context.rs`）
 
 - **狀態**：2026-10-31 使用者實機確認解決。新版 log 按下 41 次、放開 41 次，順序全部正確。

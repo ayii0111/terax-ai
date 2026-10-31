@@ -78,6 +78,18 @@ describe("WebGL surface renderer ownership", () => {
   });
 });
 
+describe("WebGL surface input", () => {
+  it("keeps the input on the cursor cell for the IME windows", () => {
+    const h = harness();
+    h.model.cursor = () => ({ x: 4, y: 2, visible: false, blinking: false });
+    h.surface.renderFrame(h.renderer as unknown as WebGlCellRenderer);
+    const { style } = h.surface.inputElement();
+    expect(style.left).toBe("32px");
+    expect(style.top).toBe("32px");
+    expect(style.height).toBe("16px");
+  });
+});
+
 describe("WebGL surface resizing", () => {
   it("keeps the model, the PTY and the renderer still during a gesture and applies the final size once", () => {
     const h = harness();
@@ -262,6 +274,7 @@ function harness() {
   surface.attach(hostElement as unknown as HTMLElement);
   return {
     surface,
+    model,
     onResize,
     setHost(width: number, height = 640) {
       hostSize.width = width;

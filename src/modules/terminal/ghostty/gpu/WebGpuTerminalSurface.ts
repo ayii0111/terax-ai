@@ -15,6 +15,11 @@ import type {
   GhosttyGpuFrame,
   GhosttyTerminalModelApi,
 } from "../GhosttyTerminalModel";
+import {
+  applyTerminalInputAnchor,
+  TERMINAL_INPUT_STYLE,
+  terminalInputAnchor,
+} from "../input/terminalInputAnchor";
 import { GhosttySearchController } from "../search/GhosttySearchController";
 import { TerminalSelectionController } from "../selection/TerminalSelectionController";
 import { DevicePixelRatioMonitor } from "./DevicePixelRatioMonitor";
@@ -239,8 +244,7 @@ export class WebGpuTerminalSurface
     this.input.setAttribute("autocapitalize", "off");
     this.input.setAttribute("autocomplete", "off");
     this.input.setAttribute("spellcheck", "false");
-    this.input.style.cssText =
-      "position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;resize:none;pointer-events:none;";
+    this.input.style.cssText = TERMINAL_INPUT_STYLE;
     this.scrollbar.setAttribute("aria-label", "Terminal scrollback");
     this.scrollbar.setAttribute("role", "scrollbar");
     this.scrollbar.style.cssText =
@@ -623,6 +627,10 @@ export class WebGpuTerminalSurface
       cursor,
       viewportOrigin,
       device,
+    );
+    applyTerminalInputAnchor(
+      this.input,
+      terminalInputAnchor(cursor, frame, this.metrics, this.gridShiftY()),
     );
     const bindingsChanged = this.updateBindGroup(resources);
 

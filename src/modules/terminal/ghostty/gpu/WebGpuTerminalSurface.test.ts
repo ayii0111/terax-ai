@@ -109,6 +109,20 @@ describe("WebGPU surface data path", () => {
     );
   });
 
+  it("keeps the input on the cursor cell, hidden cursor included, for the IME windows", async () => {
+    const h = await harness();
+    h.render();
+    const { width, height } = h.surface.cellSize();
+    const { style } = h.surface.inputElement();
+    h.cursor.x = 4;
+    h.cursor.y = 2;
+    h.cursor.visible = false;
+    h.render();
+    expect(style.left).toBe(`${4 * width}px`);
+    expect(style.top).toBe(`${2 * height}px`);
+    expect(style.height).toBe(`${height}px`);
+  });
+
   it("redraws whenever the frame reports damage even if no record changed", async () => {
     const h = await harness();
     h.render();

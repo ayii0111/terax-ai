@@ -37,6 +37,11 @@ import {
   metricsForScale,
   rgbToCss,
 } from "../gpu/terminalVisuals";
+import {
+  applyTerminalInputAnchor,
+  TERMINAL_INPUT_STYLE,
+  terminalInputAnchor,
+} from "../input/terminalInputAnchor";
 import { GhosttySearchController } from "../search/GhosttySearchController";
 import { TerminalSelectionController } from "../selection/TerminalSelectionController";
 import {
@@ -177,8 +182,7 @@ export class WebGlTerminalSurface
     this.input.setAttribute("autocapitalize", "off");
     this.input.setAttribute("autocomplete", "off");
     this.input.setAttribute("spellcheck", "false");
-    this.input.style.cssText =
-      "position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;resize:none;pointer-events:none;";
+    this.input.style.cssText = TERMINAL_INPUT_STYLE;
     this.scrollbar.setAttribute("aria-label", "Terminal scrollback");
     this.scrollbar.setAttribute("role", "scrollbar");
     this.scrollbar.style.cssText =
@@ -446,6 +450,15 @@ export class WebGlTerminalSurface
       cursor.y < this.options.model.rows;
     this.cursorBlinking = cursor.blinking;
     this.armCursorBlink();
+    applyTerminalInputAnchor(
+      this.input,
+      terminalInputAnchor(
+        cursor,
+        this.options.model,
+        this.metrics,
+        this.gridShiftY(),
+      ),
+    );
     const rendered = renderer.render({
       model: this.options.model,
       damage: this.options.model.consumeDamage(),
