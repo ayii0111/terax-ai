@@ -94,6 +94,18 @@ IME 組字中（`isComposing` / `compositionstart`～`compositionend`）**不可
 - **測試**："ends a drag whose pointerup was lost instead of extending it on hover"、"stops reporting button motion once the pressed button is no longer held"、"maps MouseEvent.buttons onto the 1 << button layout"。selection 測試 fixture 的 `pointer()` 現在會帶 `buttons`（預設 `pointerup` 為 0，其餘為 1）。
 - **定位關鍵字**：`command rg -n "handlePointerMove|mouseButtons" src/modules/terminal/ghostty`
 
+## 3.4 客製化 #5：Markdown 清單按 Enter 多出一行空行（commit `fix(editor): continue Markdown lists without inserting blank lines`）
+
+- **行為**：在 `.md` 的 `- …` 行尾按 Enter，下一行直接出現 `- `，中間不會多一行空行；在空的項目上按 Enter 就結束清單。
+- **原因**：Terax 直接用 `@codemirror/lang-markdown` 預設的 Enter（`insertNewlineContinueMarkup`）。它有兩個刻意設計的行為：(1) 清單的第 1、2 項之間有空行（loose list）時，每次 Enter 都補一行空行，維持鬆散格式；(2) 在空的第 2 項上按 Enter，不是結束清單，而是把清單改成 loose，之後就一直觸發 (1)。
+- **修法**：`src/modules/editor/lib/markdownEnter.ts`
+  - 使用 `insertNewlineContinueMarkupCommand({ nonTightLists: false })` 關掉 (2)。
+  - 包一層 `dispatch`：插入的文字如果是「換行＋只有縮排或 `>` 的空行＋換行」開頭（`LOOSE_GAP`），就拿掉那行空行，再重新建立 transaction，selection 用 `map(changeSet, 1)` 對應過去。
+  - `languageDefinitions.ts` 的 Markdown loader 改成 `markdown({ addKeymap: false })`，再加上 `markdownKeymap()`（Enter → 上面的指令；Backspace → 原本的 `deleteMarkupBackward`）。
+- **測試**：`markdownEnter.test.ts`（tight/loose/巢狀 loose/空項目/引用/行中斷開）。
+- **定位關鍵字**：`command rg -n "lang-markdown" src/modules/editor`
+- **先看官方是否已修**：如果升級後的 `@codemirror/lang-markdown` 有提供關掉 loose 補空行的選項，就改用官方選項。
+
 ## 4. 在新版程式碼中找到修改點（不要依賴檔名）
 
 官方可能再重構或搬檔。用以下關鍵字定位：

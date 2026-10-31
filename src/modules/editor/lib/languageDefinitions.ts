@@ -148,11 +148,14 @@ export const LANGUAGES: LanguageDefinition[] = [
       Promise.all([
         import("@codemirror/lang-markdown"),
         import("./markdownExtras"),
-      ]).then(([m, extras]) => [
+        import("./markdownEnter"),
+      ]).then(([m, extras, enter]) => [
         m.markdown({
           base: m.markdownLanguage,
           codeLanguages: extras.markdownCodeLanguages(),
+          addKeymap: false,
         }),
+        enter.markdownKeymap(),
         extras.markdownExtras(),
       ]),
     userSelectable: true,
