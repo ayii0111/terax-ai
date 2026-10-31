@@ -36,6 +36,8 @@ export type TerminalGpuTheme = {
   readonly background: Rgb;
   readonly foreground: Rgb;
   readonly cursor: Rgb;
+  /** Text under the cursor, so it stays readable on the cursor's colour. */
+  readonly cursorText: Rgb;
   readonly selection: {
     readonly color: Rgb;
     readonly alpha: number;
@@ -169,6 +171,7 @@ export function readTerminalGpuTheme(): TerminalGpuTheme {
     background: cssColorToRgb(tokens.background),
     foreground: cssColorToRgb(tokens.foreground),
     cursor: cssColorToRgb(tokens.cursor),
+    cursorText: cssColorToRgb(tokens.cursorAccent),
     selection: {
       color: [selection[0], selection[1], selection[2]],
       alpha: selection[3],

@@ -7,7 +7,7 @@
  * All coordinates are integer device pixels; nothing is filtered.
  */
 
-export const SCREEN_UNIFORM_BYTES = 192;
+export const SCREEN_UNIFORM_BYTES = 208;
 
 /** Byte offsets of `Screen` fields; the TypeScript packer mirrors this layout. */
 export const SCREEN_OFFSET = {
@@ -35,6 +35,7 @@ export const SCREEN_OFFSET = {
   decoration: 144,
   contrast: 160,
   gamma: 176,
+  cursorTextColor: 192,
 } as const;
 
 export const SCREEN_FLAG_TEXT_BLINK_VISIBLE = 1;
@@ -51,6 +52,8 @@ export const SCREEN_FLAG_SELECTION_RECTANGULAR = 8;
  * - A glyph that overhangs to the left is clipped where the neighbour's background differs,
  *   so it cannot paint over a selection or a coloured cell.
  * - Cell-exact shapes (box drawing, shades) keep their coverage as drawn, without contrast.
+ * - A block cursor covers both halves of a wide character, in the same way from either half.
+ *   Glyphs are drawn over the cursor, so they switch colour inside it, per pixel.
  */
 const COMMON = /* wgsl */ `
 struct Screen {
@@ -71,6 +74,7 @@ struct Screen {
   decoration: vec4u,
   contrast: vec4f,
   gamma: vec4f,
+  cursor_text_color: vec4f,
 }
 
 @group(0) @binding(0) var<uniform> screen: Screen;
@@ -101,6 +105,25 @@ fn is_wide_lead(record: vec4u) -> bool {
 
 fn is_spacer_tail(index: u32, col: u32) -> bool {
   return col > 0u && is_wide_lead(cells[index - 1u]);
+}
+
+fn cursor_contains(local_position: vec2f) -> bool {
+  var start = screen.cursor_origin;
+  var end = start + screen.cursor_size;
+  let cell_size = vec2f(screen.cell_size);
+  if (all(screen.cursor_size == cell_size)) {
+    let col = u32(start.x / cell_size.x);
+    let row = u32(start.y / cell_size.y);
+    if (col < screen.dims.x && row < screen.dims.y) {
+      let index = row * screen.dims.x + col;
+      if (is_wide_lead(cells[index])) {
+        end.x = end.x + cell_size.x;
+      } else if (is_spacer_tail(index, col)) {
+        start.x = start.x - cell_size.x;
+      }
+    }
+  }
+  return all(local_position >= start) && all(local_position < end);
 }
 
 fn selection_contains(row: i32, col: i32) -> bool {
@@ -208,9 +231,7 @@ fn fragment_main(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let record = cells[index];
   let background = cell_background(index, cell.y, cell.x);
 
-  let cursor_end = screen.cursor_origin + screen.cursor_size;
-  if (local_position.x >= screen.cursor_origin.x && local_position.y >= screen.cursor_origin.y &&
-      local_position.x < cursor_end.x && local_position.y < cursor_end.y) {
+  if (cursor_contains(local_position)) {
     return vec4f(screen.cursor_color.rgb, 1.0);
   }
 
@@ -345,7 +366,13 @@ fn fragment_main(
     return vec4f(sample.rgb, sample.a * color.a);
   }
   let coverage = textureLoad(coverage_texture, texel, 0).r;
-  if ((glyph_flags & 2u) != 0u) { return vec4f(color.rgb, color.a * coverage); }
-  return vec4f(color.rgb, color.a * apply_contrast(coverage, color.rgb));
+  let local_position = position.xy - vec2f(screen.origin) + vec2f(0.0, f32(screen.shift_y));
+  let foreground = select(
+    color.rgb,
+    screen.cursor_text_color.rgb,
+    cursor_contains(local_position),
+  );
+  if ((glyph_flags & 2u) != 0u) { return vec4f(foreground, color.a * coverage); }
+  return vec4f(foreground, color.a * apply_contrast(coverage, foreground));
 }
 `;

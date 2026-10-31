@@ -24,6 +24,7 @@ const STATE: ScreenUniformState = {
   searchActive: false,
   cursor: { x: 22, y: 42, width: 11, height: 21 },
   cursorColor: [255, 128, 0],
+  cursorTextColor: [0, 51, 255],
   background: [10, 20, 30],
   selection: NO_SELECTION,
   selectionColor: [51, 102, 204],
@@ -225,9 +226,25 @@ describe("shader uniform layout", () => {
         decoration: SCREEN_OFFSET.decoration,
         contrast: SCREEN_OFFSET.contrast,
         gamma: SCREEN_OFFSET.gamma,
+        cursor_text_color: SCREEN_OFFSET.cursorTextColor,
       });
     },
   );
+
+  it("packs the colour of the text under the cursor", () => {
+    const uniform = new ScreenUniform();
+    uniform.pack(STATE);
+    const offset = SCREEN_OFFSET.cursorTextColor / 4;
+    expect(uniform.data[offset + 1]).toBeCloseTo(51 / 255, 6);
+    expect(uniform.data[offset + 2]).toBe(1);
+    expect(uniform.data[offset + 3]).toBe(1);
+  });
+
+  it("recolours text and paints the background from the same cursor bounds", () => {
+    expect(BACKGROUND_SHADER).toMatch(/if \(cursor_contains\(local_position\)\)/);
+    expect(GLYPH_SHADER).toMatch(/cursor_contains\(local_position\)/);
+    expect(GLYPH_SHADER).toMatch(/screen\.cursor_text_color\.rgb/);
+  });
 
   it("subtracts the viewport origin from window-relative fragment coordinates in both passes", () => {
     // Fragment positions are relative to the whole canvas, but a pane's cells, cursor and

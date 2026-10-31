@@ -4,9 +4,11 @@ import {
   selectionBoundsContain,
 } from "../selection/TerminalSelectionController";
 import {
+  blockCursorSpan,
   cursorRect,
   cursorThickness,
   decorationMetrics,
+  dimmedBlockCursorColor,
   leftOverhangPadding,
   NO_SELECTION,
   selectionUniform,
@@ -42,6 +44,28 @@ function bounds(
     rectangular,
   });
 }
+
+describe("block cursor", () => {
+  it("covers both halves of a wide character from either half", () => {
+    expect(blockCursorSpan(5, 80, 1)).toEqual({ column: 5, span: 1 });
+    expect(blockCursorSpan(5, 80, 2)).toEqual({ column: 5, span: 2 });
+    expect(blockCursorSpan(6, 80, 0)).toEqual({ column: 5, span: 2 });
+  });
+
+  it("stays inside the grid", () => {
+    expect(blockCursorSpan(79, 80, 2)).toEqual({ column: 79, span: 1 });
+    expect(blockCursorSpan(0, 80, 0)).toEqual({ column: 0, span: 1 });
+  });
+
+  it("fades part of the way toward the background during a blink", () => {
+    expect(dimmedBlockCursorColor([0, 0, 0], [255, 255, 255])).toEqual([
+      89, 89, 89,
+    ]);
+    expect(dimmedBlockCursorColor([200, 100, 50], [200, 100, 50])).toEqual([
+      200, 100, 50,
+    ]);
+  });
+});
 
 describe("selectionUniform", () => {
   it("is inactive without a selection or when it lies outside the viewport", () => {

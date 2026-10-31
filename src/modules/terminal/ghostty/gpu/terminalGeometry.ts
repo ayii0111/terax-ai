@@ -1,3 +1,4 @@
+import type { Rgb } from "../core/packedCells";
 import type { TerminalSelectionBounds } from "../selection/TerminalSelectionController";
 import type { TerminalFontMetrics } from "./terminalVisuals";
 
@@ -72,6 +73,34 @@ export function cursorRect(
     return { x, y: y + height - thickness, width, height: thickness };
   }
   return { x, y, width, height };
+}
+
+/** How far a block cursor fades toward the background in the off phase of its blink. */
+const BLOCK_CURSOR_BLINK_FADE = 0.35;
+
+/** A blinking block only fades, so the text it sits on never jumps between two colours. */
+export function dimmedBlockCursorColor(cursor: Rgb, background: Rgb): Rgb {
+  const fade = (from: number, to: number) =>
+    Math.round(from + (to - from) * BLOCK_CURSOR_BLINK_FADE);
+  return [
+    fade(cursor[0], background[0]),
+    fade(cursor[1], background[1]),
+    fade(cursor[2], background[2]),
+  ];
+}
+
+/**
+ * The columns a block cursor covers: both halves of a wide character.
+ * @param cellWidth width of the cursor's cell: 2 for a wide lead, 0 for its trailing half.
+ */
+export function blockCursorSpan(
+  column: number,
+  cols: number,
+  cellWidth: number,
+): { readonly column: number; readonly span: number } {
+  if (cellWidth === 2 && column + 1 < cols) return { column, span: 2 };
+  if (cellWidth === 0 && column > 0) return { column: column - 1, span: 2 };
+  return { column, span: 1 };
 }
 
 /** Left glyph overhang tolerated before a differently coloured neighbour clips it. */

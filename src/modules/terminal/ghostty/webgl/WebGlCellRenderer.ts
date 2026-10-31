@@ -11,6 +11,7 @@ import {
   CanvasBackingStore,
   type GestureGrowth,
 } from "../gpu/CanvasBackingStore";
+import { blockCursorSpan, dimmedBlockCursorColor } from "../gpu/terminalGeometry";
 import type {
   TerminalFontMetrics,
   TerminalGpuTheme,
@@ -46,6 +47,8 @@ export type WebGlRendererFrame = {
   readonly model: GhosttyTerminalModelApi;
   readonly damage: TerminalDamage;
   readonly cursorVisible: boolean;
+  /** The off phase of the blink, for a cursor that fades rather than disappears. */
+  readonly cursorFaded?: boolean;
   readonly textBlinkVisible: boolean;
   readonly selection: TerminalSelectionBounds | null;
   readonly searchMatchAt: (row: number, column: number) => 0 | 1 | 2;
@@ -79,6 +82,8 @@ type GlyphProgram = Program & {
   readonly atlas: WebGLUniformLocation;
   readonly colorAtlas: WebGLUniformLocation;
   readonly textBlinkVisible: WebGLUniformLocation;
+  readonly cursorRect: WebGLUniformLocation;
+  readonly cursorText: WebGLUniformLocation;
 };
 
 type RectangleVertices = {
@@ -790,7 +795,24 @@ export class WebGlCellRenderer {
         1,
       );
     } else {
-      this.writeRectangle(vertices, 0, cursor.x, cursor.y, 1, 1, color, 1);
+      const { column, span } = blockCursorSpan(
+        cursor.x,
+        this.cols,
+        frame.model.renderCells().width(cursor.y * this.cols + cursor.x),
+      );
+      const theme = this.profile.theme;
+      this.writeRectangle(
+        vertices,
+        0,
+        column,
+        cursor.y,
+        span,
+        1,
+        frame.cursorFaded
+          ? this.packRgb(dimmedBlockCursorColor(theme.cursor, theme.background))
+          : color,
+        1,
+      );
     }
     vertices.count = 1;
     return this.uploadCursor();
@@ -907,6 +929,21 @@ export class WebGlCellRenderer {
     gl.uniform1i(
       resources.glyphProgram.textBlinkVisible,
       textBlinkVisible ? 1 : 0,
+    );
+    // In window coordinates (origin bottom left), as the fragment shader reads them.
+    const hasCursor = this.cursorVertices.count > 0;
+    const rect = this.cursorVertices.attributes;
+    const left = hasCursor ? rect[0] * this.canvas.width : 0;
+    const right = hasCursor ? (rect[0] + rect[2]) * this.canvas.width : 0;
+    const top = hasCursor ? (1 - rect[1]) * this.canvas.height : 0;
+    const bottom = hasCursor ? (1 - rect[1] - rect[3]) * this.canvas.height : 0;
+    gl.uniform4f(resources.glyphProgram.cursorRect, left, bottom, right, top);
+    const cursorText = profile.theme.cursorText;
+    gl.uniform3f(
+      resources.glyphProgram.cursorText,
+      cursorText[0] / 255,
+      cursorText[1] / 255,
+      cursorText[2] / 255,
     );
     gl.drawElementsInstanced(
       gl.TRIANGLE_STRIP,
@@ -1060,6 +1097,16 @@ export class WebGlCellRenderer {
       glyphProgramValue,
       "u_text_blink_visible",
     );
+    const glyphCursorRect = requiredUniform(
+      gl,
+      glyphProgramValue,
+      "u_cursor_rect",
+    );
+    const glyphCursorText = requiredUniform(
+      gl,
+      glyphProgramValue,
+      "u_cursor_text",
+    );
 
     const backgroundBuffer = requiredBuffer(gl);
     const cursorBuffer = requiredBuffer(gl);
@@ -1109,6 +1156,8 @@ export class WebGlCellRenderer {
         atlas: glyphAtlas,
         colorAtlas: glyphColorAtlas,
         textBlinkVisible: glyphTextBlinkVisible,
+        cursorRect: glyphCursorRect,
+        cursorText: glyphCursorText,
       },
       backgroundVao,
       cursorVao,
@@ -1446,6 +1495,8 @@ precision lowp float;
 uniform sampler2D u_atlas;
 uniform sampler2D u_color_atlas;
 uniform bool u_text_blink_visible;
+uniform highp vec4 u_cursor_rect;
+uniform vec3 u_cursor_text;
 in vec2 v_texcoord;
 in vec4 v_color;
 flat in float v_intrinsic_color;
@@ -1458,6 +1509,8 @@ void main() {
     outColor = vec4(color.rgb, alpha * color.a);
   } else {
     float coverage = texture(u_atlas, v_texcoord).r;
-    outColor = vec4(v_color.rgb, alpha * coverage);
+    bool inCursor = all(greaterThanEqual(gl_FragCoord.xy, u_cursor_rect.xy)) &&
+      all(lessThan(gl_FragCoord.xy, u_cursor_rect.zw));
+    outColor = vec4(inCursor ? u_cursor_text : v_color.rgb, alpha * coverage);
   }
 }`;

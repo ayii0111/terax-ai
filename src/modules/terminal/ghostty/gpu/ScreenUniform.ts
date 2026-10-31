@@ -37,6 +37,7 @@ export type ScreenUniformState = {
   readonly searchActive: boolean;
   readonly cursor: CursorRect | null;
   readonly cursorColor: readonly [number, number, number];
+  readonly cursorTextColor: readonly [number, number, number];
   readonly background: readonly [number, number, number];
   readonly selection: SelectionUniform;
   readonly selectionColor: readonly [number, number, number];
@@ -90,6 +91,12 @@ export class ScreenUniform {
       floats[SCREEN_OFFSET.cursorSize / 4 + 1] = state.cursor.height;
     }
     writeColor(floats, SCREEN_OFFSET.cursorColor / 4, state.cursorColor, 1);
+    writeColor(
+      floats,
+      SCREEN_OFFSET.cursorTextColor / 4,
+      state.cursorTextColor,
+      1,
+    );
     writeColor(floats, SCREEN_OFFSET.themeBackground / 4, state.background, 1);
     writeColor(
       floats,

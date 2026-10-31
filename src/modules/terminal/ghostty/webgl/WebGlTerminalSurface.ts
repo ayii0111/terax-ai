@@ -462,7 +462,9 @@ export class WebGlTerminalSurface
     const rendered = renderer.render({
       model: this.options.model,
       damage: this.options.model.consumeDamage(),
-      cursorVisible: this.cursorEnabled && this.cursorVisible,
+      cursorVisible:
+        this.cursorEnabled && (this.cursorVisible || cursor.style === "block"),
+      cursorFaded: !this.cursorVisible,
       textBlinkVisible: this.textBlinkVisible,
       selection: this.selection.normalizedBounds(),
       searchMatchAt: (row, column) => this.search.matchAt(row, column),

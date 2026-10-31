@@ -156,6 +156,7 @@ const THEME = {
   background: [0, 0, 0],
   foreground: [255, 255, 255],
   cursor: [255, 255, 255],
+  cursorText: [0, 0, 0],
   selection: { color: [50, 50, 50], alpha: 0.5 },
   palette: [],
 } as const;

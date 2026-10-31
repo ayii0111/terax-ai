@@ -11,6 +11,7 @@ const theme: TerminalGpuTheme = {
   background: [0, 0, 0],
   foreground: [255, 255, 255],
   cursor: [255, 255, 255],
+  cursorText: [0, 0, 0],
   selection: { color: [80, 100, 200], alpha: 0.4 },
   palette: [],
 };

@@ -164,6 +164,21 @@ IME 組字中（`isComposing` / `compositionstart`～`compositionend`）**不可
   - 三指拖曳選字、拖曳分頁排序正常；組字到一半點別的分頁，回來可繼續打字。
 - **合併衝突時**：這是獨立新檔，只有 `lib.rs` 的 `install` 呼叫與 `mod.rs` 可能衝突。若 WebKit 或 wry 改了 `inputContext` 判斷或類別結構，先照上面的驗收確認。官方若自己修好就拿掉這個 commit。
 
+## 3.4.4 客製化 #9：方塊游標把文字蓋住（commit `fix(terminal): keep text readable under a gently blinking block cursor`）
+
+- **狀態**：2026-10-31 使用者實機確認效果良好。
+- **行為**：Cursor style 選 Block 時，方塊內的文字用反差色顯示，停在中文字上會蓋滿兩格；開啟 Cursor blink 時方塊在深淺之間微微閃爍，不會整個消失。Bar、Underline 維持原本的閃爍方式。
+- **原因**：文字其實畫在方塊上方，只是和方塊同色；主題的 `cursorAccent` 沒有接到 GPU 繪製，方塊也固定一格寬。
+- **修法**：
+  - `terminalVisuals.ts` 的 `cursorText` 讀 `cursorAccent`。
+  - WebGPU：`shaders.ts` 的 `cursor_contains` 同時決定方塊範圍與文字換色；`Screen` 新增 `cursor_text_color`。
+  - WebGL：`WebGlCellRenderer.ts` 的 glyph 著色器用 `u_cursor_rect`、`u_cursor_text` 換色；寬度由 `blockCursorSpan` 算出。
+  - 閃爍：`dimmedBlockCursorColor` 把方塊往背景色淡化 35%。沿用既有的 600ms 計時，不做逐格動畫，避免持續重繪。
+- **測試**：`terminalGeometry.test.ts` 的 "block cursor"、`ScreenUniform.test.ts` 的游標文字色。單元測試跑不了著色器，改動後要實機看。
+- **定位關鍵字**：`command rg -n "cursor_contains|cursorText|blockCursorSpan|dimmedBlockCursorColor" src`
+- **驗收**：亮暗主題都試，WebGPU 和 WebGL 都要一樣：方塊停在英文、中文、彩色文字上都看得清楚；分割窗格與視窗縮小時，換色範圍仍對齊方塊。
+- **合併衝突時**：官方若改了 `Screen` 的版面，`SCREEN_OFFSET`、WGSL struct、`SCREEN_UNIFORM_BYTES` 要一起改，`ScreenUniform.test.ts` 會檢查三者一致。
+
 ## 3.5 暫時性診斷：拖曳黏著 trace（已移除）
 
 `3ecd7d0` 加入、#8 解決後移除。升級時這兩個 commit 都不要 cherry-pick。若拖曳黏著再次發生，可從 `3ecd7d0` 取回。

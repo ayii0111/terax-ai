@@ -35,6 +35,7 @@ import {
 } from "./TerminalFitQueue";
 import {
   cursorRect,
+  dimmedBlockCursorColor,
   decorationMetrics,
   leftOverhangPadding,
   NO_SELECTION,
@@ -1395,8 +1396,11 @@ export class WebGpuTerminalSurface
       this.cursorVisible = true;
     }
     this.armCursorBlink();
+    const blockFading = !this.cursorVisible && cursor.style === "block";
     const showCursor =
-      this.cursorEnabled && this.cursorVisible && this.nativeCursorVisible;
+      this.cursorEnabled &&
+      (this.cursorVisible || blockFading) &&
+      this.nativeCursorVisible;
     const bounds = this.selection.normalizedBounds();
     const theme = this.theme;
     const state: ScreenUniformState = {
@@ -1416,7 +1420,10 @@ export class WebGpuTerminalSurface
       cursor: showCursor
         ? cursorRect(cursor, cursor.style, this.metrics)
         : null,
-      cursorColor: theme.cursor,
+      cursorColor: blockFading
+        ? dimmedBlockCursorColor(theme.cursor, theme.background)
+        : theme.cursor,
+      cursorTextColor: theme.cursorText,
       background: theme.background,
       selection: bounds
         ? selectionUniform(bounds, viewportOriginLine, frame.rows)
