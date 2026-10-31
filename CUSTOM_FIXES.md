@@ -106,6 +106,35 @@ IME 組字中（`isComposing` / `compositionstart`～`compositionend`）**不可
 - **定位關鍵字**：`command rg -n "lang-markdown" src/modules/editor`
 - **先看官方是否已修**：如果升級後的 `@codemirror/lang-markdown` 有提供關掉 loose 補空行的選項，就改用官方選項。
 
+## 3.4.1 客製化 #6：三指拖曳中按鍵後，游標移動仍在拖曳（commit `fix(app): end script-driven drags when a key is pressed`，`src/lib/dragKeyGuard.ts`）
+
+- **狀態**：2026-10-31 使用者實機確認解決。新版 log 有 `drag-ended-by-key`，且沒有再出現 `ANOMALY`。
+- **別再重新排查（分層測試結果）**：
+  - 三指拖曳中，只有非修飾鍵會觸發：⌘C/V/X/A/;、F6、⌃; 會；不按鍵、單按 ⌘ 不會。⌘F 或一般文字在 cc 裡會蓋掉症狀（取消選取），F6 在 cc 裡看不到、在純 shell 看得到，所以要在純 shell 驗證。
+  - 純 WKWebView 的原生選取、tao + wry 的原生選取都不會黏著；同一個純 WKWebView 加上 JS 實作的拖曳就會。所以原因是「script 拖曳照著 `buttons` 走」，不是 wry/tao/Tauri 的 bug，也不是輸入法或原生選單。
+  - 其他 macOS 軟體不會發生，這是使用者的實測結論，不要再質疑。
+
+- **行為**：拖曳中按下非修飾鍵（⌘C、F6、⌃; 等）就結束拖曳，放開手指後單純移動游標不可再延伸選取。單按 ⌘、Shift、⌥ 不影響拖曳。
+- **原因**：三指拖曳中按非修飾鍵後，`buttons` 會持續回報左鍵按著，直到下一次輕點。原生文字選取不會因此繼續延伸，但用 script 實作的拖曳（終端機選取、CodeMirror、分頁排序）只看 `buttons`，就會一路跟著游標。純 WKWebView 加上一段 JS 拖曳即可重現，與 Terax 其他程式無關，所以 #4 的 `buttons` 校正擋不到。
+- **修法**：`main.tsx` 在 render 前安裝 `installDragKeyGuard`，在 window capture 階段追蹤左鍵按壓；遇到非修飾鍵就對按下時的 target 發出 `pointercancel` 與 `mouseup`。用 cancel 而不是 up，分頁排序、檔案移動才不會被提交；`mouseup` 是因為 CodeMirror 和終端機滑鼠回報只認它。
+- **測試**：`src/lib/dragKeyGuard.test.ts`。
+- **定位關鍵字**：`command rg -n "installDragKeyGuard|HeldPointerTracker" src`
+- **驗收**：在 shell、`claude`、`.md` 分頁各試一次：三指拖曳選字，手指不離開時按 F6 或 ⌘C，放開後單指移動游標，選取不可跟著跑。
+- **合併衝突時**：
+  - 這個修法是獨立新檔，幾乎只有 `main.tsx` 會衝突。原則是 `installDragKeyGuard()` 要在 `render` 之前呼叫，才會先於會 `stopImmediatePropagation` 的全域快捷鍵（`useGlobalShortcuts.ts`）。
+  - 如果 3.5 的 trace 已移除，改成不帶參數呼叫。
+  - 官方若重寫拖曳，確認每個 script 拖曳仍能被 `pointercancel` 或 `mouseup` 結束：`command rg -n "pointercancel|\"mouseup\"|onPointerCancel" src`。新增的拖曳要有 cancel 處理，且 cancel 不可提交（分頁排序、檔案移動）。
+  - 官方若自己處理了按鍵結束拖曳，就拿掉這個 commit，再照上面的驗收確認。
+
+### 尚未解決：事件順序顛倒（與 #6 不同原因）
+
+- **現象**：輕點偶爾會變成「放開先到、按下後到」，按下帶 `buttons=0`，後面沒有放開。發生在雙擊後立刻移動，或連續點不同分頁標籤時。
+- **後果**：cc 收到按下卻沒收到放開，移動就被當成拖曳；分頁列的 `drag.current` 留著，移動超過 4px 就變成排序。只有按鍵觸發的情況才會被 #6 順帶結束。
+- **目前狀態**：成因沒查、也還沒修。想好的防護有三項，都還沒寫：
+  - `GhosttyInputController.handleMouseMove` 沒按鍵時改送 `35`（現在送 `32`，cc 會當成拖曳；要一併改現有測試裡的 `<32`）。
+  - 校正 `mouseButtons` 時補送放開給 TUI。
+  - `TabBar.tsx` 的拖曳加上 `buttons` 檢查和 `lostpointercapture` 處理。
+
 ## 4. 在新版程式碼中找到修改點（不要依賴檔名）
 
 官方可能再重構或搬檔。用以下關鍵字定位：
@@ -136,6 +165,7 @@ command pnpm tauri build --bundles app
 ```
 
 - 先看官方是否已修好（#1009 / #956 / #1215 / #1397）。官方已修的部分就把對應 commit 拿掉，並確認測試仍通過。
+- **cherry-pick 有衝突時**：以第 1～3 節的「行為」和「原因」為準，不要硬保留舊 diff。先看該節的「定位關鍵字」找到新位置，在新結構上重寫，再用該節的測試和驗收確認。同一個 commit 不要混入官方變更。
 - 測試全過後再 `git branch -f custom custom-$NEW`，並 push 到 `fork`（**push 前先問使用者**）。
 
 ## 6. 安裝
@@ -161,3 +191,4 @@ command pnpm tauri build --bundles app
 - 2026-07：0.8.x，修在 `rendererPool.ts` + xterm patch（fork 分支 `fix/option-arrow-keycode-229`、`fix/ime-fullwidth-first-char-keydownseen`，筆記在該分支的 `FIX_NOTES.md`）。
 - 2026-08：merge 官方新版後功能全失效（原因：修改和官方更新混在同一個 commit，且官方改了檔案結構）。
 - 2026-10-29：0.9.0 換成 libghostty，舊修法的檔案都不存在了。改在 `GhosttyInputController.ts` 重做，建立本文件與 `custom` 分支模式。
+- 2026-10-31：找到三指拖曳中按鍵造成拖曳黏著的根源，加上 `dragKeyGuard`（#6）。事件順序顛倒仍未解決（見 3.4.1 末段）。
